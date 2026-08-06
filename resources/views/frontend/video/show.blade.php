@@ -76,6 +76,7 @@
                     audioTracks: [],
                     audioTrack: -1,
                     isDirectStream: false,
+                    isShareLink: {{ (str_starts_with($video->storage_folder, 'http://') || str_starts_with($video->storage_folder, 'https://')) ? 'true' : 'false' }},
 
                     initPlayer() {
                         this.volume = this.$refs.video.volume;
@@ -295,6 +296,12 @@
                             if (this.isDirectStream) return;
                             this.isDirectStream = true;
 
+                            if (this.isShareLink) {
+                                this.$refs.video.pause();
+                                this.isPlaying = false;
+                                return;
+                            }
+
                             const currentTime = this.$refs.video.currentTime;
                             const wasPlaying = !this.$refs.video.paused;
 
@@ -313,6 +320,10 @@
                         } else {
                             if (!this.isDirectStream) return;
                             this.isDirectStream = false;
+
+                            if (this.isShareLink) {
+                                return;
+                            }
 
                             const currentTime = this.$refs.video.currentTime;
                             const wasPlaying = !this.$refs.video.paused;
@@ -782,6 +793,7 @@
                 @else
                 <!-- Native Video Element -->
                 <video
+                    x-show="!isDirectStream || !isShareLink"
                     x-ref="video"
                     class="w-full h-full object-cover cursor-pointer"
                     :style="isFullscreen ? 'width:100%!important;height:100%!important;object-fit:cover!important;' : ''"
@@ -797,6 +809,31 @@
                     <track kind="captions" label="Captions" src="{{ $video->subtitle }}" srclang="en" />
                     @endif
                 </video>
+
+                <!-- High-Speed Iframe Embed for Original 1080p Streaming -->
+                @php
+                    $isShareLink = str_starts_with($video->storage_folder, 'http://') || str_starts_with($video->storage_folder, 'https://');
+                    $embedUrl = '';
+                    if ($isShareLink) {
+                        if (preg_match('/\/s\/([a-zA-Z0-9_-]+)/', $video->storage_folder, $m)) {
+                            $surl = $m[1];
+                            // If surl starts with '1', the embed player needs it without the leading '1'
+                            if (str_starts_with($surl, '1')) {
+                                $surl = substr($surl, 1);
+                            }
+                            $embedUrl = 'https://www.1024terabox.com/sharing/embed?surl=' . $surl . '&autoplay=1';
+                        }
+                    }
+                @endphp
+                @if($isShareLink && $embedUrl)
+                    <iframe
+                        x-show="isDirectStream"
+                        class="w-full h-full border-0 absolute inset-0 z-0 bg-black"
+                        src="{{ $embedUrl }}"
+                        allow="autoplay; fullscreen"
+                        allowfullscreen
+                    ></iframe>
+                @endif
 
                 <!-- Buffering Overlay -->
                 <div x-show="isBuffering" class="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
