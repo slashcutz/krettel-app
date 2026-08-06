@@ -152,7 +152,7 @@ class VideoController extends Controller
         $rewritten = Cache::remember('terabox_hls_' . $video->id, now()->addMinutes(30), function () use ($video) {
             try {
                 $terabox = app(TeraBoxClient::class);
-                $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_1080');
+                $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_480');
             } catch (\Throwable $e) {
                 Log::warning('[TERABOX-HLS] Failed to fetch playlist.', [
                     'video_id' => $video->id,
@@ -221,7 +221,7 @@ class VideoController extends Controller
 
         try {
             $terabox = app(TeraBoxClient::class);
-            $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_1080');
+            $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_480');
 
             Cache::put('terabox_hls_' . $video->id, static::rewritePlaylist($video, $playlist), now()->addMinutes(30));
             static::warmFirstSegment($video, $terabox, $playlist);
@@ -270,5 +270,24 @@ class VideoController extends Controller
         $decoded = base64_decode(strtr($token, '-_', '+/'), true);
 
         return $decoded === false ? null : $decoded;
+    }
+
+    /**
+     * Redirect directly to TeraBox's high-quality dlink for 1080p streaming.
+     */
+    public function streamDirect(Video $video)
+    {
+        if ($video->video_url !== 'terabox-remote' || ! $video->storage_folder) {
+            abort(404);
+        }
+
+        try {
+            $terabox = app(TeraBoxClient::class);
+            $dlink = $terabox->getDirectLink($video->storage_folder);
+            return redirect()->away($dlink);
+        } catch (\Throwable $e) {
+            Log::error('[STREAM-DIRECT] Failed: ' . $e->getMessage());
+            abort(502, 'Failed to resolve high quality stream.');
+        }
     }
 }

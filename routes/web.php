@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/watch/{slug}', [VideoController::class, 'show'])->name('video.show');
 Route::get('/stream/{video}', [VideoController::class, 'stream'])->name('video.stream');
+Route::get('/stream/direct/{video}', [VideoController::class, 'streamDirect'])->name('video.stream.direct');
 Route::get('/stream/segment/{video}/{u}', [VideoController::class, 'segment'])->name('video.segment');
 Route::get('/stream/hls/{video}/{path}', [VideoController::class, 'hls'])->where('path', '.*')->name('video.hls');
 Route::get('/search', [SearchController::class, 'index'])->name('search.index');

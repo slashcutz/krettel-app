@@ -75,6 +75,7 @@
                     levels: [],
                     audioTracks: [],
                     audioTrack: -1,
+                    isDirectStream: false,
 
                     initPlayer() {
                         this.volume = this.$refs.video.volume;
@@ -271,6 +272,44 @@
                         } else if (this.$refs.video.levels) {
                             Array.from(this.$refs.video.levels).forEach((l) => { l.enabled = false; });
                             if (index >= 0) this.$refs.video.levels[index].enabled = true;
+                        }
+                    },
+
+                    toggleSourceQuality(type) {
+                        this.showSettings = false;
+                        if (type === 'original') {
+                            if (this.isDirectStream) return;
+                            this.isDirectStream = true;
+
+                            const currentTime = this.$refs.video.currentTime;
+                            const wasPlaying = !this.$refs.video.paused;
+
+                            if (this.hls) {
+                                this.hls.destroy();
+                                this.hls = null;
+                            }
+
+                            this.$refs.video.src = "{{ route('video.stream.direct', $video->id) }}";
+                            this.$refs.video.load();
+
+                            this.$refs.video.addEventListener('loadedmetadata', () => {
+                                this.$refs.video.currentTime = currentTime;
+                                if (wasPlaying) this.$refs.video.play();
+                            }, { once: true });
+                        } else {
+                            if (!this.isDirectStream) return;
+                            this.isDirectStream = false;
+
+                            const currentTime = this.$refs.video.currentTime;
+                            const wasPlaying = !this.$refs.video.paused;
+
+                            this.$refs.video.src = "{{ route('video.stream', $video->id) }}";
+                            this.attachHls();
+
+                            this.$refs.video.addEventListener('loadedmetadata', () => {
+                                this.$refs.video.currentTime = currentTime;
+                                if (wasPlaying) this.$refs.video.play();
+                            }, { once: true });
                         }
                     },
 
@@ -831,16 +870,28 @@
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                                     Quality
                                 </div>
-                                <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="setQuality(-1)">
-                                    <span class="text-sm" :class="{ 'text-primary font-bold': quality === -1, 'text-gray-300': quality !== -1 }">Auto</span>
-                                    <svg x-show="quality === -1" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                </div>
-                                <template x-for="lv in levels" :key="lv.index">
-                                    <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="setQuality(lv.index)">
-                                        <span class="text-sm" :class="{ 'text-primary font-bold': quality === lv.index, 'text-gray-300': quality !== lv.index }" x-text="lv.label"></span>
-                                        <svg x-show="quality === lv.index" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    </div>
-                                </template>
+                                 @if($video->video_url === 'terabox-remote')
+                                     <!-- Quality Modes for TeraBox Remote -->
+                                     <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('auto')">
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': !isDirectStream, 'text-gray-300': isDirectStream }">Auto (Fast)</span>
+                                         <svg x-show="!isDirectStream" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                     </div>
+                                     <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('original')">
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': isDirectStream, 'text-gray-300': !isDirectStream }">Original HD (1080p)</span>
+                                         <svg x-show="isDirectStream" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                     </div>
+                                 @else
+                                     <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="setQuality(-1)">
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': quality === -1, 'text-gray-300': quality !== -1 }">Auto</span>
+                                         <svg x-show="quality === -1" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                     </div>
+                                     <template x-for="lv in levels" :key="lv.index">
+                                         <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="setQuality(lv.index)">
+                                             <span class="text-sm" :class="{ 'text-primary font-bold': quality === lv.index, 'text-gray-300': quality !== lv.index }" x-text="lv.label"></span>
+                                             <svg x-show="quality === lv.index" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                         </div>
+                                     </template>
+                                 @endif
                             </div>
                         </div>
                     </div>
