@@ -36,11 +36,16 @@
                 <!-- Continue Watching -->
                 @if(isset($watchHistory) && $watchHistory->isNotEmpty())
                 <section>
-                    <h2 class="text-xl md:text-2xl font-bold text-white mb-4">Continue Watching</h2>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl md:text-2xl font-bold text-white">Continue Watching</h2>
+                        <a href="{{ route('my-list') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
+                    </div>
+                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @foreach($watchHistory as $history)
                             @if($history->video)
-                                <x-video-card :video="$history->video" />
+                                <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
+                                    <x-video-card :video="$history->video" />
+                                </div>
                             @endif
                         @endforeach
                     </div>
@@ -92,10 +97,14 @@
 
                 <!-- Trending Now -->
                 <section>
-                    <h2 class="text-xl md:text-2xl font-bold text-white mb-4">Trending Now</h2>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl md:text-2xl font-bold text-white">Trending Now</h2>
+                    </div>
+                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @forelse($trending as $video)
-                            <x-video-card :video="$video" />
+                            <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
+                                <x-video-card :video="$video" />
+                            </div>
                         @empty
                             <p class="text-muted">No trending videos yet.</p>
                         @endforelse
