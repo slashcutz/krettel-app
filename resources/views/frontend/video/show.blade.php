@@ -428,8 +428,10 @@
                             if (this.miniPlayer) this.miniPlayer = false;
                             document.body.style.overflow = 'hidden';
                             this.showControls = true;
+                            this.rotateToLandscape();
                         } else {
                             document.body.style.overflow = '';
+                            this.unrotate();
                         }
                     },
 
