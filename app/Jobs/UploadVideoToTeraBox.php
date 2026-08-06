@@ -23,9 +23,12 @@ class UploadVideoToTeraBox implements ShouldQueue
 
     public function __construct(public Video $video, public string $stagingPath) {}
 
+    protected ?string $lastProgressPhase = null;
+
     public function handle(TeraBoxClient $terabox): void
     {
-        Log::info('[TERABOX-SYNC] Job started for video ' . $this->video->id . ' (' . $this->video->title . ')', [
+        Log::channel('krettel')->info('[TERABOX-SYNC] Job started for video ' . $this->video->id . ' (' . $this->video->title . ')', [
+            'video_id' => $this->video->id,
             'staging_path' => $this->stagingPath,
         ]);
 
@@ -46,11 +49,15 @@ class UploadVideoToTeraBox implements ShouldQueue
             $remoteDir = config('terabox.remote_dir', '/Apps/Krettel');
             $filename = basename($this->stagingPath);
 
-            Log::info('[TERABOX-SYNC] Authenticating + creating remote dir...', ['remote_dir' => $remoteDir]);
+            Log::channel('krettel')->info('[TERABOX-SYNC] Authenticating + creating remote dir...', [
+                'video_id' => $this->video->id,
+                'remote_dir' => $remoteDir,
+            ]);
             $terabox->ensureAuthenticated();
             $terabox->createDir($remoteDir);
 
-            Log::info('[TERABOX-SYNC] Uploading video to TeraBox...', [
+            Log::channel('krettel')->info('[TERABOX-SYNC] Uploading video to TeraBox...', [
+                'video_id' => $this->video->id,
                 'filename' => $filename,
                 'size_bytes' => filesize($absolutePath),
             ]);
@@ -71,7 +78,7 @@ class UploadVideoToTeraBox implements ShouldQueue
             // Pre-fetch the HLS playlist + first segment so the first play is instant.
             \App\Http\Controllers\VideoController::warmStream($this->video);
 
-            Log::info('[TERABOX-SYNC] Video uploaded to TeraBox successfully.', [
+            Log::channel('krettel')->info('[TERABOX-SYNC] Video uploaded to TeraBox successfully.', [
                 'video_id' => $this->video->id,
                 'remote_path' => $remotePath,
                 'staging_deleted' => true,
@@ -85,7 +92,7 @@ class UploadVideoToTeraBox implements ShouldQueue
                 'link' => route('video.show', $this->video->slug),
             ]);
         } catch (\Throwable $e) {
-            Log::error('[TERABOX-SYNC] Failed to upload video to TeraBox.', [
+            Log::channel('krettel')->error('[TERABOX-SYNC] Failed to upload video to TeraBox.', [
                 'video_id' => $this->video->id,
                 'error' => $e->getMessage(),
                 'staging_path' => $this->stagingPath,
@@ -119,5 +126,14 @@ class UploadVideoToTeraBox implements ShouldQueue
             'total' => $total,
             'updated_at' => now()->toDateTimeString(),
         ], now()->addHours(2));
+
+        if ($this->lastProgressPhase !== $phase) {
+            $this->lastProgressPhase = $phase;
+            Log::channel('krettel')->info('[TERABOX-SYNC] Progress phase -> ' . $phase, [
+                'video_id' => $this->video->id,
+                'bytes' => $bytes,
+                'total' => $total,
+            ]);
+        }
     }
 }

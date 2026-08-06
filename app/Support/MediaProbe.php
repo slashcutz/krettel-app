@@ -82,6 +82,67 @@ class MediaProbe
     }
 
     /**
+     * Return container/format metadata (ffprobe -show_format) or null.
+     */
+    public static function format(string $path): ?array
+    {
+        if (! file_exists($path)) {
+            return null;
+        }
+
+        try {
+            $process = new Process([
+                config('ffmpeg.ffprobe'),
+                '-v', 'error',
+                '-print_format', 'json',
+                '-show_format',
+                $path,
+            ]);
+
+            $process->setTimeout(60);
+            $process->run();
+
+            if (! $process->isSuccessful()) {
+                return null;
+            }
+
+            $data = json_decode($process->getOutput(), true);
+
+            return $data['format'] ?? null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Friendly container name (e.g. "mp4", "mkv", "webm") or null.
+     */
+    public static function container(string $path): ?string
+    {
+        $format = static::format($path);
+        $name = $format['format_name'] ?? null;
+
+        if (! $name) {
+            return null;
+        }
+
+        $friendly = [
+            'matroska,webm' => 'mkv',
+            'mov,mp4,m4a,3gp,3g2,mj2' => 'mp4',
+            'webm' => 'webm',
+            'matroska' => 'mkv',
+        ];
+
+        foreach ($friendly as $key => $label) {
+            if ($key === $name || str_contains($name, $key)) {
+                return $label;
+            }
+        }
+
+        return $name;
+    }
+
+    /**
      * Video codec name of the primary video stream (e.g. h264, hevc, mpeg2video).
      */
     public static function videoCodec(string $path): ?string

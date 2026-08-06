@@ -35,6 +35,7 @@ Route::middleware(['auth', 'role:Super Admin|Admin'])->group(function () {
         return view('frontend.upload.popup');
     })->name('upload.popup');
     Route::post('/upload', [VideoUploadController::class, 'store'])->name('upload.store');
+    Route::get('/upload/status/{video}', [VideoUploadController::class, 'status'])->name('upload.status');
 });
 
 Route::middleware('auth')->group(function () {

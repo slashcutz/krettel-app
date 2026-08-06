@@ -22,11 +22,12 @@ class VideoUploadController extends Controller
 
     public function store(Request $request)
     {
-        Log::info('[UPLOAD] Upload request received.', [
+        Log::channel('krettel')->info('[UPLOAD] Upload request received.', [
             'title' => $request->input('title'),
             'storage_provider' => $request->input('storage_provider', 'local'),
             'has_video_file' => $request->hasFile('video_file'),
             'has_thumbnail' => $request->hasFile('thumbnail'),
+            'user_id' => auth()->id(),
         ]);
 
         try {
@@ -41,13 +42,13 @@ class VideoUploadController extends Controller
             'previews.*' => 'nullable|string|max:500',
         ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('[UPLOAD] Validation failed.', ['errors' => $e->errors()]);
+            Log::channel('krettel')->error('[UPLOAD] Validation failed.', ['errors' => $e->errors()]);
             throw $e;
         }
 
         $storageProvider = $request->input('storage_provider', 'local');
         $slug = Str::slug($request->input('title')) . '-' . uniqid();
-        Log::info('[UPLOAD] Validation passed. Storage provider: ' . $storageProvider, ['slug' => $slug]);
+        Log::channel('krettel')->info('[UPLOAD] Validation passed. Storage provider: ' . $storageProvider, ['slug' => $slug]);
 
         $stagingPath = null;
         $videoPath = null;
@@ -59,33 +60,33 @@ class VideoUploadController extends Controller
             if ($storageProvider === 'terabox') {
                 try {
                     $stagingPath = $file->store('pending-uploads');
-                    Log::info('[UPLOAD] Video staged on local disk.', [
+                    Log::channel('krettel')->info('[UPLOAD] Video staged on local disk.', [
                         'staging_path' => $stagingPath,
                         'original_name' => $file->getClientOriginalName(),
                         'file_size_bytes' => $originalSize,
                         'php_upload_max_filesize' => $maxAllowed,
                     ]);
                 } catch (\Throwable $e) {
-                    Log::error('[UPLOAD] Failed to stage video file.', ['error' => $e->getMessage()]);
+                    Log::channel('krettel')->error('[UPLOAD] Failed to stage video file.', ['error' => $e->getMessage()]);
                     throw $e;
                 }
             } else {
                 try {
                     $videoPath = $file->store('videos', 'public');
-                    Log::info('[UPLOAD] Video stored on local PUBLIC disk.', ['video_path' => $videoPath]);
+                    Log::channel('krettel')->info('[UPLOAD] Video stored on local PUBLIC disk.', ['video_path' => $videoPath]);
                 } catch (\Throwable $e) {
-                    Log::error('[UPLOAD] Failed to store video to public disk.', ['error' => $e->getMessage()]);
+                    Log::channel('krettel')->error('[UPLOAD] Failed to store video to public disk.', ['error' => $e->getMessage()]);
                     throw $e;
                 }
             }
         } else {
-            Log::warning('[UPLOAD] No video file provided in request.');
+            Log::channel('krettel')->warning('[UPLOAD] No video file provided in request.');
         }
 
         $thumbnailPath = null;
         if ($request->hasFile('thumbnail')) {
             $thumbnailPath = $request->file('thumbnail')->store('thumbnails', 'public');
-            Log::info('[UPLOAD] Thumbnail stored on public disk.', ['thumbnail' => $thumbnailPath]);
+            Log::channel('krettel')->info('[UPLOAD] Thumbnail stored on public disk.', ['thumbnail' => $thumbnailPath]);
         }
 
         $video = Video::create([
@@ -109,7 +110,7 @@ class VideoUploadController extends Controller
             'resolution' => $request->input('resolution', '1080p'),
         ]);
 
-        Log::info('[UPLOAD] Video row created in DB.', [
+        Log::channel('krettel')->info('[UPLOAD] Video row created in DB.', [
             'video_id' => $video->id,
             'title' => $video->title,
             'slug' => $video->slug,
@@ -143,6 +144,7 @@ class VideoUploadController extends Controller
                 ]);
                 $savedAudioCount++;
                 Log::channel('krettel')->info('[UPLOAD] Separate audio track saved for video ' . $video->id, [
+                    'video_id' => $video->id,
                     'file_path' => $audioPath,
                     'language' => $languageName,
                     'is_default' => isset($defaults[$index]) ? true : false,
@@ -151,37 +153,41 @@ class VideoUploadController extends Controller
         }
 
         if ($stagingPath) {
-            Log::info('[UPLOAD] Dispatching processing job.', [
+            Log::channel('krettel')->info('[UPLOAD] Dispatching processing job for video ' . $video->id, [
                 'video_id' => $video->id,
                 'staging_path' => $stagingPath,
             ]);
 
-            $muxedAudio = MediaProbe::audioStreamCount(
-                Storage::disk('local')->path($stagingPath)
-            );
+            $absolutePath = Storage::disk('local')->path($stagingPath);
+            $container = MediaProbe::container($absolutePath);
+            $muxedAudio = MediaProbe::audioStreamCount($absolutePath);
             $totalAudio = $muxedAudio + $savedAudioCount;
 
             Log::channel('krettel')->info('[UPLOAD] Processing decision for video ' . $video->id, [
+                'video_id' => $video->id,
+                'container' => $container,
                 'muxed_audio' => $muxedAudio,
                 'separate_audio' => $savedAudioCount,
                 'total_audio' => $totalAudio,
             ]);
 
             if ($totalAudio >= 2) {
-                Log::channel('krettel')->info('[UPLOAD] Multi-audio source detected — transcoding to HLS.', [
+                Log::channel('krettel')->info('[UPLOAD] Multi-audio source detected (' . ($container ?: 'unknown') . ', ' . $totalAudio . ' audio) — transcoding to HLS.', [
                     'video_id' => $video->id,
                 ]);
                 $video->update(['hls_status' => 'processing']);
+                Log::channel('krettel')->info('[UPLOAD] Status -> processing (HLS transcode queued).', ['video_id' => $video->id]);
                 TranscodeVideoToHls::dispatch($video, $stagingPath);
             } else {
                 Log::channel('krettel')->warning(
-                    '[UPLOAD] Fewer than 2 audio sources — deferring to TeraBox (no audio switcher).',
+                    '[UPLOAD] Single-audio source (' . ($container ?: 'unknown') . ', ' . $totalAudio . ' audio) — deferring to TeraBox (no audio switcher).',
                     ['video_id' => $video->id, 'total_audio' => $totalAudio]
                 );
+                Log::channel('krettel')->info('[UPLOAD] Status -> terabox (TeraBox upload queued).', ['video_id' => $video->id]);
                 UploadVideoToTeraBox::dispatch($video, $stagingPath);
             }
         } else {
-            Log::info('[UPLOAD] No staging path — video kept local (video_url=' . $video->video_url . ').');
+            Log::channel('krettel')->info('[UPLOAD] No staging path — video kept local.', ['video_id' => $video->id, 'video_url' => $video->video_url]);
         }
 
         // Create notification for the user
@@ -208,21 +214,107 @@ class VideoUploadController extends Controller
                         'file_path' => $subtitlePath,
                         'is_default' => isset($request->input('default_subtitle')[$index]) ? true : false,
                     ]);
-                    Log::info('[UPLOAD] Subtitle uploaded for video ' . $video->id . '.', ['file_path' => $subtitlePath]);
+                    Log::channel('krettel')->info('[UPLOAD] Subtitle uploaded for video ' . $video->id . '.', ['video_id' => $video->id, 'file_path' => $subtitlePath]);
                 }
             }
         }
 
-        Log::info('[UPLOAD] Upload flow completed successfully.', ['video_id' => $video->id]);
+        Log::channel('krettel')->info('[UPLOAD] Upload flow completed successfully.', ['video_id' => $video->id]);
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'success' => true,
                 'message' => 'Video uploaded successfully! It is now processing.',
-                'redirect' => route('admin.videos.index')
+                'redirect' => route('admin.videos.index'),
+                'video_id' => $video->id,
+                'slug' => $video->slug,
             ]);
         }
 
         return redirect()->route('admin.videos.index')->with('status', 'Video uploaded successfully! It is now processing.');
+    }
+
+    /**
+     * Live status + log lines for one video. Polled by the upload popup.
+     */
+    public function status(Video $video)
+    {
+        Log::channel('krettel')->debug('[UPLOAD] Status requested for video ' . $video->id, ['video_id' => $video->id]);
+
+        $state = 'uploading';
+
+        if ($video->hls_status === 'processing') {
+            $state = 'processing';
+        } elseif ($video->hls_status === 'ready') {
+            $state = 'ready';
+        } elseif ($video->hls_status === 'failed') {
+            $state = 'failed';
+        } elseif ($video->video_url === 'terabox-remote') {
+            $state = 'terabox';
+        } elseif ($video->video_url === 'processing') {
+            $state = 'terabox-uploading';
+        } elseif (in_array($video->video_url, ['pending-upload'], true)) {
+            $state = 'pending';
+        }
+
+        return response()->json([
+            'video_id' => $video->id,
+            'title' => $video->title,
+            'slug' => $video->slug,
+            'hls_status' => $video->hls_status,
+            'video_url' => $video->video_url,
+            'state' => $state,
+            'done' => in_array($state, ['ready', 'failed', 'terabox'], true),
+            'logs' => $this->readLogs($video->id, 120),
+        ]);
+    }
+
+    /**
+     * Tail today's krettel log file for lines mentioning this video id.
+     */
+    protected function readLogs(int $videoId, int $limit = 120): array
+    {
+        $files = [
+            storage_path('logs/krettel-' . now()->format('Y-m-d') . '.log'),
+            storage_path('logs/krettel.log'),
+        ];
+
+        $needle = '"video_id":' . $videoId;
+        $lines = [];
+
+        foreach ($files as $file) {
+            if (! is_file($file) || ! is_readable($file)) {
+                continue;
+            }
+
+            $fh = @fopen($file, 'r');
+            if (! $fh) {
+                continue;
+            }
+
+            while (($line = fgets($fh)) !== false) {
+                if (str_contains($line, $needle)) {
+                    $lines[] = $this->parseLogLine($line);
+                }
+            }
+            fclose($fh);
+        }
+
+        return array_slice($lines, -$limit);
+    }
+
+    protected function parseLogLine(string $line): array
+    {
+        $time = '';
+        $level = 'info';
+        $message = trim($line);
+
+        if (preg_match('/^\[([^\]]+)\]\s+(\w+)\.(\w+):\s?(.*)$/', $line, $m)) {
+            $time = $m[1];
+            $level = strtolower($m[3]);
+            $message = trim($m[4]);
+        }
+
+        return ['time' => $time, 'level' => $level, 'message' => $message];
     }
 }
