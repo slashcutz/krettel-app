@@ -883,9 +883,9 @@
 
                         <!-- Right: Volume & Fullscreen -->
                         <div class="flex items-center space-x-2 flex-shrink-0">
-                            <!-- Volume Control -->
-                            <div class="flex items-center space-x-2 group/volume relative">
-                                <button @click.stop="toggleMute()" class="p-1 text-zinc-300 hover:text-white transition-colors focus:outline-none">
+                            <!-- Volume Control (Expandable on click for mobile/tablet) -->
+                            <div class="flex items-center space-x-2 group/volume relative" x-data="{ showVolume: false }" @click.away="showVolume = false">
+                                <button @click.stop="if (typeof isMobileOrTablet !== 'undefined' && isMobileOrTablet()) { if (showVolume) { toggleMute() } else { showVolume = true } } else { toggleMute() }" class="p-1 text-zinc-300 hover:text-white transition-colors focus:outline-none">
                                     <template x-if="volume === 0"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z m12-2l-4-4m0 4l4-4"></path></svg></template>
                                     <template x-if="volume > 0 && volume <= 0.5"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM11 5.5L14.5 9M11 18.5L14.5 15m4.036-2.536a3.535 3.535 0 010-5"></path></svg></template>
                                     <template x-if="volume > 0.5"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg></template>
@@ -893,7 +893,8 @@
                                 <input type="range" min="0" max="1" step="0.05" x-model="volume"
                                        @input="updateVolume()" @change="updateVolume()"
                                        :style="`background: linear-gradient(to right, #dc2626 ${volume * 100}%, rgba(255,255,255,0.25) ${volume * 100}%)`"
-                                       class="volume-slider h-1 w-12 opacity-100 sm:w-0 sm:opacity-0 transition-all duration-200 cursor-pointer sm:group-hover/volume:w-24 sm:group-hover/volume:opacity-100" />
+                                       class="volume-slider h-1 transition-all duration-200 cursor-pointer"
+                                       :class="showVolume ? 'w-24 opacity-100' : 'w-0 opacity-0 sm:w-0 sm:opacity-0 sm:group-hover/volume:w-24 sm:group-hover/volume:opacity-100'" />
                             </div>
 
                             <!-- Fullscreen Toggle -->
