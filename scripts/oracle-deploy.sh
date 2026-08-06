@@ -197,6 +197,7 @@ fi
 rm -rf public/storage
 php artisan storage:link
 php artisan migrate --force
+php artisan db:seed --class=AdminUserSeeder --force || true
 php artisan optimize || true
 
 # ------------------------------- Nginx ----------------------------------------

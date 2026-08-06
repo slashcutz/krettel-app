@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
         ]);
         
         $this->call([
+            AdminUserSeeder::class,
             SettingsSeeder::class,
             DummyDataSeeder::class,
             TeraBoxImageSeeder::class,
