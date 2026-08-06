@@ -22,7 +22,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($videos as $video)
+                    @forelse($videos as $video)
                         <tr class="border-b border-border hover:bg-secondary/30 transition-colors">
                             <td class="px-6 py-4 flex items-center space-x-3">
                                 <div class="w-16 h-10 bg-secondary rounded overflow-hidden flex-shrink-0">
@@ -51,7 +51,13 @@
                                 </form>
                             </td>
                         </tr>
-                    @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="5" class="px-6 py-8 text-center text-muted">
+                                No videos found.
+                            </td>
+                        </tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>

@@ -23,7 +23,7 @@
 <div class="relative w-full h-[80vh] md:h-[90vh] flex items-center justify-start overflow-hidden">
     <!-- Background Video/Image -->
     <div class="absolute inset-0 w-full h-full">
-        <img src="{{ $image }}" alt="Hero Background" class="w-full h-full object-cover">
+        <img src="{{ $image }}" alt="Hero Background" loading="eager" fetchpriority="high" decoding="sync" class="w-full h-full object-cover">
         
         <!-- Gradient Overlays for smooth transition to background -->
         <div class="absolute inset-0 bg-gradient-to-r from-background via-background/60 to-transparent"></div>

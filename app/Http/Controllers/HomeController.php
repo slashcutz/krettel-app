@@ -31,6 +31,20 @@ class HomeController extends Controller
             return Collection::with('items')->where('visibility', 'public')->latest()->take(10)->get();
         });
 
-        return view('frontend.home.index', compact('featured', 'trending', 'newReleases', 'recommended', 'collections'));
+        $favorites = \App\Models\Favorite::with('video')
+            ->where(fn ($q) => \App\Support\DeviceContext::contextQuery($q))
+            ->latest()
+            ->get()
+            ->filter(fn ($f) => $f->video && $f->video->visibility === 'public');
+
+        $watchHistory = \App\Models\WatchHistory::with('video')
+            ->where(fn ($q) => \App\Support\DeviceContext::contextQuery($q))
+            ->latest('updated_at')
+            ->take(10)
+            ->get()
+            ->filter(fn ($h) => $h->video && $h->video->visibility === 'public')
+            ->unique('video_id');
+
+        return view('frontend.home.index', compact('featured', 'trending', 'newReleases', 'recommended', 'collections', 'favorites', 'watchHistory'));
     }
 }

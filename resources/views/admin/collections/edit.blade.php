@@ -30,15 +30,24 @@
                     <textarea name="description" id="description" rows="3" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">{{ old('description', $collection->description) }}</textarea>
                 </div>
 
-                <div>
+                @php
+                    $existingImage = $collection->image ? \App\Support\TeraBoxImage::url($collection->terabox_image, 'collection', $collection->id) ?? asset('storage/' . $collection->image) : '';
+                @endphp
+                <div x-data="{ logoPreview: '{{ $existingImage }}' }">
                     <label for="image" class="block text-sm font-medium text-white mb-2">Cover Image</label>
-                    @if($collection->image)
-                        <div class="mb-3">
-                            <img src="{{ asset('storage/' . $collection->image) }}" class="h-32 w-48 object-cover rounded-lg border border-border" alt="Current cover">
+                    <div class="flex flex-col sm:flex-row sm:items-start items-center space-y-3 sm:space-y-0 sm:space-x-3">
+                        <div class="w-32 h-20 bg-secondary border border-border rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 relative">
+                            <img :src="logoPreview" x-show="logoPreview" class="max-w-full max-h-full object-contain" alt="Image preview">
+                            <span x-show="!logoPreview" class="text-xs text-muted">No Image</span>
                         </div>
-                    @endif
-                    <input type="file" name="image" id="image" accept="image/*" class="bg-secondary border border-border text-white text-sm rounded-lg block w-full p-2.5 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary/20 file:text-primary file:text-sm file:font-medium">
-                    <p class="text-xs text-muted mt-1.5">Optional. Leave empty to keep the current image. JPEG, PNG, GIF or WebP up to 5MB.</p>
+                        <div class="flex-1 w-full">
+                            <label for="image" class="cursor-pointer inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-secondary border border-border rounded-lg hover:border-primary transition-colors">
+                                Choose image
+                            </label>
+                            <input type="file" name="image" id="image" accept="image/*" class="hidden" @change="const f = $event.target.files[0]; if (f) logoPreview = URL.createObjectURL(f)">
+                            <p class="text-xs text-muted mt-2">Optional. JPEG, PNG, GIF or WebP up to 5MB. Leave empty to keep current.</p>
+                        </div>
+                    </div>
                     @error('image') <p class="text-primary text-xs mt-1">{{ $message }}</p> @enderror
                 </div>
 

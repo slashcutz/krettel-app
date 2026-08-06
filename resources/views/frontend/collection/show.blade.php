@@ -24,7 +24,7 @@
         <div class="relative w-full min-h-[75vh] flex items-end overflow-hidden">
             <div class="absolute inset-0">
                 @if($heroUrl)
-                    <img src="{{ $heroUrl }}" alt="{{ $collection->name }}" class="w-full h-full object-cover scale-105">
+                    <img src="{{ $heroUrl }}" alt="{{ $collection->name }}" loading="eager" fetchpriority="high" decoding="sync" class="w-full h-full object-cover scale-105">
                 @else
                     <div class="w-full h-full bg-gradient-to-br from-primary/40 via-purple-900/40 to-background"></div>
                 @endif
@@ -42,7 +42,7 @@
                     @if($heroUrl)
                     <div class="flex-shrink-0">
                         <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl overflow-hidden border-4 border-gray-800/80 shadow-2xl">
-                            <img src="{{ $heroUrl }}" alt="{{ $collection->name }}" class="w-full h-full object-cover">
+                            <img src="{{ $heroUrl }}" alt="{{ $collection->name }}" loading="eager" fetchpriority="high" decoding="async" class="w-full h-full object-cover">
                         </div>
                     </div>
                     @endif

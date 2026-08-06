@@ -6,7 +6,7 @@
             <h2 class="text-lg font-bold text-white">Banner Details</h2>
         </div>
 
-        <form action="{{ route('admin.banners.update', $banner->id) }}" method="POST" class="p-4 sm:p-6">
+        <form action="{{ route('admin.banners.update', $banner) }}" method="POST" enctype="multipart/form-data" class="p-4 sm:p-6">
             @csrf
             @method('PUT')
 
@@ -22,14 +22,33 @@
                     </div>
                 </div>
 
-                <div>
-                    <label for="image_url" class="block text-sm font-medium text-white mb-2">Image URL</label>
-                    <input type="url" name="image_url" id="image_url" value="{{ old('image_url', $banner->image_url) }}" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5" placeholder="https://...">
+                @php
+                    $existingImage = $banner->image_url ? asset('storage/' . $banner->image_url) : '';
+                    if (filter_var($banner->image_url, FILTER_VALIDATE_URL)) {
+                        $existingImage = $banner->image_url;
+                    }
+                @endphp
+                <div x-data="{ logoPreview: '{{ $existingImage }}' }">
+                    <label for="image" class="block text-sm font-medium text-white mb-2">Banner Image</label>
+                    <div class="flex flex-col sm:flex-row sm:items-start items-center space-y-3 sm:space-y-0 sm:space-x-3">
+                        <div class="w-48 h-20 bg-secondary border border-border rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 relative">
+                            <img :src="logoPreview" x-show="logoPreview" class="max-w-full max-h-full object-contain" alt="Image preview">
+                            <span x-show="!logoPreview" class="text-xs text-muted">No Image</span>
+                        </div>
+                        <div class="flex-1 w-full">
+                            <label for="image" class="cursor-pointer inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-white bg-secondary border border-border rounded-lg hover:border-primary transition-colors">
+                                Choose image
+                            </label>
+                            <input type="file" name="image" id="image" accept="image/*" class="hidden" @change="const f = $event.target.files[0]; if (f) logoPreview = URL.createObjectURL(f)">
+                            <p class="text-xs text-muted mt-2">Optional. JPEG, PNG, GIF or WebP up to 5MB. Leave empty to keep current.</p>
+                        </div>
+                    </div>
+                    @error('image') <p class="text-primary text-xs mt-1">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
                     <label for="link_url" class="block text-sm font-medium text-white mb-2">Link URL</label>
-                    <input type="url" name="link_url" id="link_url" value="{{ old('link_url', $banner->link_url) }}" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5" placeholder="https://...">
+                    <input type="text" name="link_url" id="link_url" value="{{ old('link_url', $banner->link_url) }}" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5" placeholder="https://... or /path">
                 </div>
 
                 <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -51,9 +70,8 @@
                 <div>
                     <label for="status" class="block text-sm font-medium text-white mb-2">Status</label>
                     <select name="status" id="status" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
-                        @foreach(['active', 'inactive', 'draft'] as $opt)
-                            <option value="{{ $opt }}" {{ old('status', $banner->status) == $opt ? 'selected' : '' }}>{{ ucfirst($opt) }}</option>
-                        @endforeach
+                        <option value="1" {{ old('status', $banner->status) == '1' ? 'selected' : '' }}>Active</option>
+                        <option value="0" {{ old('status', $banner->status) == '0' ? 'selected' : '' }}>Inactive</option>
                     </select>
                 </div>
             </div>

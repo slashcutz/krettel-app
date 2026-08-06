@@ -32,7 +32,7 @@
                                 <div class="flex items-center space-x-3">
                                     @if($collection->image)
                                         <div class="w-16 h-10 bg-secondary rounded overflow-hidden flex-shrink-0">
-                                            <img src="{{ asset('storage/' . $collection->image) }}" class="w-full h-full object-cover" alt="">
+                                            <img src="{{ $collection->image ? \App\Support\TeraBoxImage::url($collection->terabox_image, 'collection', $collection->id) ?? asset('storage/' . $collection->image) : '' }}" class="w-full h-full object-cover" alt="">
                                         </div>
                                     @endif
                                     <span class="font-medium text-white">{{ $collection->name }}</span>
@@ -74,7 +74,7 @@
                 <div class="flex items-start gap-3">
                     @if($collection->image)
                         <div class="w-20 h-12 bg-secondary rounded overflow-hidden flex-shrink-0">
-                            <img src="{{ asset('storage/' . $collection->image) }}" class="w-full h-full object-cover" alt="">
+                            <img src="{{ $collection->image ? \App\Support\TeraBoxImage::url($collection->terabox_image, 'collection', $collection->id) ?? asset('storage/' . $collection->image) : '' }}" class="w-full h-full object-cover" alt="">
                         </div>
                     @endif
                     <div class="flex-1 min-w-0">

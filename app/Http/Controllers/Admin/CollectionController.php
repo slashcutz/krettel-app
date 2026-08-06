@@ -64,7 +64,7 @@ class CollectionController extends Controller
 
         $this->syncItems($collection, $request->input('video_ids', []));
 
-        return redirect()->route('admin.collections.show', $collection->id)
+        return redirect()->route('admin.collections.show', $collection->slug)
             ->with('success', 'Collection created successfully.');
     }
 

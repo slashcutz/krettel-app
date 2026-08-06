@@ -15,8 +15,8 @@ return [
     |
     */
 
-    'ffmpeg' => env('FFMPEG_BINARY', 'ffmpeg'),
+    'ffmpeg' => env('FFMPEG_BINARY', PHP_OS_FAMILY === 'Windows' ? 'ffmpeg' : '/usr/bin/ffmpeg'),
 
-    'ffprobe' => env('FFPROBE_BINARY', 'ffprobe'),
+    'ffprobe' => env('FFPROBE_BINARY', PHP_OS_FAMILY === 'Windows' ? 'ffprobe' : '/usr/bin/ffprobe'),
 
 ];

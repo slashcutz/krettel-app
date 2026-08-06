@@ -23,6 +23,34 @@
             <!-- Video Sections -->
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 -mt-20 md:-mt-32 relative z-20 space-y-12">
                 
+                <!-- Continue Watching -->
+                @if(isset($watchHistory) && $watchHistory->isNotEmpty())
+                <section>
+                    <h2 class="text-xl md:text-2xl font-bold text-white mb-4">Continue Watching</h2>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        @foreach($watchHistory as $history)
+                            @if($history->video)
+                                <x-video-card :video="$history->video" />
+                            @endif
+                        @endforeach
+                    </div>
+                </section>
+                @endif
+
+                <!-- My List -->
+                @if(isset($favorites) && $favorites->isNotEmpty())
+                <section>
+                    <h2 class="text-xl md:text-2xl font-bold text-white mb-4">My List</h2>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        @foreach($favorites as $favorite)
+                            @if($favorite->video)
+                                <x-video-card :video="$favorite->video" />
+                            @endif
+                        @endforeach
+                    </div>
+                </section>
+                @endif
+
                 <!-- Collections -->
                 @if($collections->isNotEmpty())
                 <section id="collections">

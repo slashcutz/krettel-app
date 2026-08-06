@@ -11,7 +11,7 @@
 
 <a href="{{ route('collection.show', data_get($collection, 'slug', data_get($collection, 'id', 'sample-collection'))) }}"
    class="group relative block aspect-[2/3] rounded-2xl overflow-hidden border border-white/10 bg-secondary shadow-lg transition-all duration-300 hover:scale-[1.03] hover:border-primary hover:shadow-2xl">
-    <img src="{{ $imageUrl }}" alt="{{ data_get($collection, 'name', 'Collection') }}" loading="lazy" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
+    <img src="{{ $imageUrl }}" alt="{{ data_get($collection, 'name', 'Collection') }}" loading="eager" fetchpriority="high" decoding="async" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
 
     <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
 

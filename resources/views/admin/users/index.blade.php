@@ -19,7 +19,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($users as $user)
+                    @forelse($users as $user)
                         <tr class="border-b border-border hover:bg-secondary/30 transition-colors">
                             <td class="px-6 py-4 font-medium text-white flex items-center space-x-3">
                                 <img src="https://ui-avatars.com/api/?name={{ urlencode($user->name) }}&background=2A2D34&color=fff" class="w-8 h-8 rounded-full">
@@ -43,7 +43,13 @@
                                 </form>
                             </td>
                         </tr>
-                    @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="5" class="px-6 py-8 text-center text-muted">
+                                No users found.
+                            </td>
+                        </tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>

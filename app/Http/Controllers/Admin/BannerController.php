@@ -35,16 +35,22 @@ class BannerController extends Controller
         $request->validate([
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
-            'image_url' => 'nullable|url|max:500',
-            'link_url' => 'nullable|url|max:500',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'link_url' => 'nullable|string|max:500',
             'video_id' => 'nullable|exists:videos,id',
             'sort_order' => 'integer',
-            'status' => 'in:active,inactive,draft',
+            'status' => 'boolean',
         ]);
 
-        Banner::create($request->only([
-            'title', 'subtitle', 'image_url', 'link_url', 'video_id', 'sort_order', 'status',
-        ]));
+        $data = $request->only([
+            'title', 'subtitle', 'link_url', 'video_id', 'sort_order', 'status',
+        ]);
+
+        if ($request->hasFile('image')) {
+            $data['image_url'] = $request->file('image')->store('banners', 'public');
+        }
+
+        Banner::create($data);
 
         return redirect()->route('admin.banners.index')
             ->with('success', 'Banner created successfully.');
@@ -79,16 +85,22 @@ class BannerController extends Controller
         $request->validate([
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
-            'image_url' => 'nullable|url|max:500',
-            'link_url' => 'nullable|url|max:500',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'link_url' => 'nullable|string|max:500',
             'video_id' => 'nullable|exists:videos,id',
             'sort_order' => 'integer',
-            'status' => 'in:active,inactive,draft',
+            'status' => 'boolean',
         ]);
 
-        $banner->update($request->only([
-            'title', 'subtitle', 'image_url', 'link_url', 'video_id', 'sort_order', 'status',
-        ]));
+        $data = $request->only([
+            'title', 'subtitle', 'link_url', 'video_id', 'sort_order', 'status',
+        ]);
+
+        if ($request->hasFile('image')) {
+            $data['image_url'] = $request->file('image')->store('banners', 'public');
+        }
+
+        $banner->update($data);
 
         return redirect()->route('admin.banners.index')
             ->with('success', 'Banner updated successfully.');

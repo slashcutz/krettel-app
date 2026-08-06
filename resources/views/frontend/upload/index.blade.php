@@ -375,10 +375,11 @@
                             }, '*');
                             window.removeEventListener('message', messageHandler);
                             
-                            // Only redirect AFTER data has safely reached the popup!
-                            setTimeout(() => {
-                                window.location.href = '{{ route("admin.videos.index") }}';
-                            }, 500);
+                            // Do not redirect the parent window, otherwise the File object reference
+                            // is destroyed by the browser and the popup upload will fail halfway!
+                            // The user can navigate away manually or we can show a success state.
+                            form.reset();
+                            this.step = 1;
                         }
                     };
                     window.addEventListener('message', messageHandler);

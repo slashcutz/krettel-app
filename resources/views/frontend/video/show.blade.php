@@ -705,8 +705,8 @@
                 <!-- Native Video Element -->
                 <video
                     x-ref="video"
-                    class="w-full h-full object-contain cursor-pointer"
-                    :style="isFullscreen ? 'width:100%!important;height:100%!important;object-fit:contain!important;' : ''"
+                    class="w-full h-full object-cover cursor-pointer"
+                    :style="isFullscreen ? 'width:100%!important;height:100%!important;object-fit:cover!important;' : ''"
                     preload="auto"
                     poster="{{ $posterUrl }}"
                     @click="togglePlay()"
@@ -1015,7 +1015,7 @@
                         @endphp
                         <a href="{{ route('video.show', $recentVideo->slug) }}" class="min-w-[210px] max-w-[210px] bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2 flex items-center space-x-3 relative overflow-hidden group cursor-pointer transition hover:border-zinc-600">
                             <div class="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
-                                <img src="{{ $rwImg }}" alt="{{ $recentVideo->title }}" class="w-full h-full object-cover" loading="lazy">
+                                <img src="{{ $rwImg }}" alt="{{ $recentVideo->title }}" class="w-full h-full object-cover" loading="eager" fetchpriority="high" decoding="async">
                                 <div class="absolute inset-0 bg-black/20 flex items-center justify-center">
                                     <svg class="w-4 h-4 fill-white text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                                 </div>

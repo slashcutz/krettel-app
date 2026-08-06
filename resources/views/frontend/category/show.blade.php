@@ -2,7 +2,7 @@
     <!-- Category Banner -->
     <div class="relative w-full h-64 md:h-80 bg-gray-900 overflow-hidden">
         @if($category->banner)
-            <img src="{{ Storage::url($category->banner) }}" alt="{{ $category->name }}" class="w-full h-full object-cover opacity-60">
+            <img src="{{ Storage::url($category->banner) }}" alt="{{ $category->name }}" loading="eager" fetchpriority="high" decoding="sync" class="w-full h-full object-cover opacity-60">
         @else
             <div class="absolute inset-0 bg-gradient-to-r from-primary/80 to-purple-900/80"></div>
         @endif

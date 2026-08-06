@@ -116,7 +116,7 @@
     <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed lg:static inset-y-0 left-0 w-64 bg-secondary/90 backdrop-blur border-r border-border flex flex-col transition-all duration-300 z-40 lg:z-20">
         <div class="h-16 flex items-center justify-between px-6 border-b border-border">
             <a href="{{ route('admin.dashboard') }}" class="flex items-center min-w-0">
-                <img src="{{ \App\Support\TeraBoxImage::url(\App\Models\Setting::get('navbar_logo'), 'settings', 'navbar_logo') ?: asset('images/logo.png') }}" alt="{{ config('app.name', 'Krettel') }} logo" class="h-12 lg:h-10 w-auto object-contain">
+                <img src="{{ \App\Support\TeraBoxImage::url(\App\Models\Setting::get('navbar_logo'), 'settings', 'navbar_logo') ?: asset('images/logo.png') }}" alt="{{ config('app.name', 'Krettel') }} logo" loading="eager" fetchpriority="high" class="h-12 lg:h-10 w-auto object-contain">
             </a>
             <button @click="sidebarOpen = false" class="lg:hidden text-muted hover:text-white" aria-label="Close menu">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -247,7 +247,7 @@
                 </div>
                 <div x-data="{ open: false }" class="relative">
                     <button @click="open = !open" class="flex items-center space-x-2 focus:outline-none">
-                        <img src="https://ui-avatars.com/api/?name={{ urlencode(Auth::user()->name ?? 'Admin') }}&background=EF4444&color=fff" alt="Admin" class="w-8 h-8 rounded-full border border-border object-cover">
+                        <img src="https://ui-avatars.com/api/?name={{ urlencode(Auth::user()->name ?? 'Admin') }}&background=EF4444&color=fff" alt="Admin" loading="eager" fetchpriority="high" class="w-8 h-8 rounded-full border border-border object-cover">
                         <span class="text-sm font-medium text-white hidden sm:block">{{ Auth::user()->name ?? 'Admin' }}</span>
                         <svg class="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
