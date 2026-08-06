@@ -27,9 +27,22 @@
                     <textarea name="short_description" id="short_description" rows="2" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">{{ old('short_description', $video->short_description) }}</textarea>
                 </div>
 
-                <div>
-                    <label for="full_description" class="block text-sm font-medium text-white mb-2">Full Description</label>
-                    <textarea name="full_description" id="full_description" rows="4" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">{{ old('full_description', $video->full_description) }}</textarea>
+                </div>
+
+                <!-- Video File Source / Mapping -->
+                <div class="p-4 bg-zinc-950/40 border border-zinc-800/80 rounded-xl space-y-4">
+                    <h3 class="text-sm font-bold text-white uppercase tracking-wide">Video File / Path</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="video_file" class="block text-xs font-medium text-gray-400 mb-1.5">Replace Local Video File (Optional)</label>
+                            <input type="file" name="video_file" id="video_file" accept="video/*" class="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-primary file:text-white hover:file:bg-red-600 block w-full cursor-pointer">
+                        </div>
+                        <div>
+                            <label for="storage_folder" class="block text-xs font-medium text-gray-400 mb-1.5">TeraBox Remote File Path (Optional)</label>
+                            <input type="text" name="storage_folder" id="storage_folder" value="{{ old('storage_folder', $video->storage_folder) }}" placeholder="e.g. /Apps/Krettel/my-file.mp4" class="bg-secondary border border-border text-white text-xs rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                            <p class="text-[9px] text-muted mt-1">If the video is already uploaded directly to TeraBox, paste the path here (e.g. <code>/Apps/Krettel/filename.mp4</code>).</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">

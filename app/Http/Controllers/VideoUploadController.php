@@ -53,9 +53,13 @@ class VideoUploadController extends Controller
         $slug = Str::slug($request->input('title')) . '-' . uniqid();
         Log::channel('krettel')->info('[UPLOAD] Validation passed. Storage provider: ' . $storageProvider, ['slug' => $slug]);
 
+        // Check if user is linking an existing TeraBox file instead of uploading a new one
+        $teraboxFilePath = trim((string) $request->input('terabox_file_path'));
+        $isLinked = ($teraboxFilePath !== '');
+
         $stagingPath = null;
         $videoPath = null;
-        if ($request->hasFile('video_file')) {
+        if (!$isLinked && $request->hasFile('video_file')) {
             $file = $request->file('video_file');
             $originalSize = $file->getSize() ?? 0;
             $maxAllowed = (int) ini_get('upload_max_filesize'); // e.g. "2G" -> 2 (display only)
@@ -83,7 +87,7 @@ class VideoUploadController extends Controller
                 }
             }
         } else {
-            Log::channel('krettel')->warning('[UPLOAD] No video file provided in request.');
+            Log::channel('krettel')->warning('[UPLOAD] No video file uploaded or file linked via TeraBox path.');
         }
 
         $thumbnailPath = null;
@@ -122,6 +126,16 @@ class VideoUploadController extends Controller
             }
         }
 
+        // Format remote path: make sure it has the remote prefix directory
+        if ($isLinked) {
+            $remotePrefix = config('terabox.remote_dir', '/Apps/Krettel');
+            // If the user entered just the name like "movie.mp4", prepend the directory.
+            // If they entered the full path, keep it.
+            if (!str_starts_with($teraboxFilePath, '/')) {
+                $teraboxFilePath = rtrim($remotePrefix, '/') . '/' . $teraboxFilePath;
+            }
+        }
+
         $video = Video::create([
             'title' => $request->input('title'),
             'slug' => $slug,
@@ -133,7 +147,8 @@ class VideoUploadController extends Controller
             'seo_title' => $request->input('seo_title'),
             'meta_description' => $request->input('meta_description'),
             'keywords' => $request->input('keywords'),
-            'video_url' => $videoPath ?? 'pending-upload',
+            'video_url' => $isLinked ? 'terabox-remote' : ($videoPath ?? 'pending-upload'),
+            'storage_folder' => $isLinked ? $teraboxFilePath : null,
             'thumbnail' => $thumbnailPath,
             'terabox_image' => $teraboxImage,
             'previews' => !empty($previews) ? $previews : null,
@@ -216,6 +231,12 @@ class VideoUploadController extends Controller
                 Log::channel('krettel')->info('[UPLOAD] Status -> terabox (TeraBox upload queued).', ['video_id' => $video->id]);
                 UploadVideoToTeraBox::dispatch($video, $stagingPath);
             }
+        } elseif ($isLinked) {
+            Log::channel('krettel')->info('[UPLOAD] Video linked instantly from TeraBox. No sync job dispatched.', ['video_id' => $video->id]);
+            // Warm the link cache
+            try {
+                \App\Http\Controllers\VideoController::warmStream($video);
+            } catch (\Throwable $e) {}
         } else {
             Log::channel('krettel')->info('[UPLOAD] No staging path — video kept local.', ['video_id' => $video->id, 'video_url' => $video->video_url]);
         }
@@ -226,9 +247,11 @@ class VideoUploadController extends Controller
             : 0;
         \App\Models\Notification::create([
             'user_id' => auth()->id(),
-            'title' => 'Video Upload Started',
-            'message' => "'{$video->title}' ({$fileSizeMB} MB) is uploading" . ($stagingPath ? ' to TeraBox...' : '.'),
-            'type' => 'upload',
+            'title' => $isLinked ? 'Video Linked Successfully' : 'Video Upload Started',
+            'message' => $isLinked 
+                ? "'{$video->title}' has been successfully mapped to TeraBox."
+                : "'{$video->title}' ({$fileSizeMB} MB) is uploading" . ($stagingPath ? ' to TeraBox...' : '.'),
+            'type' => $isLinked ? 'success' : 'upload',
             'link' => route('video.show', $video->slug),
         ]);
 

@@ -77,6 +77,8 @@ class VideoController extends Controller
             'poster_file' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
             'trailer_url' => 'nullable|url|max:500',
             'terabox_image' => 'nullable|string|max:500',
+            'storage_folder' => 'nullable|string|max:500',
+            'video_file' => 'nullable|file|mimes:mp4,mkv,webm|max:4194304',
             'previews' => 'nullable|array',
             'previews.*' => 'nullable|string|max:500',
             'preview_files' => 'nullable|array',
@@ -87,6 +89,7 @@ class VideoController extends Controller
             'title', 'slug', 'short_description', 'full_description', 'category_id',
             'release_date', 'age_rating', 'video_type', 'resolution', 'quality',
             'visibility', 'thumbnail', 'poster', 'trailer_url', 'terabox_image',
+            'storage_folder',
         ]);
 
         if ($request->hasFile('thumbnail_file')) {
@@ -99,7 +102,26 @@ class VideoController extends Controller
             $updateData['poster'] = asset('storage/' . $path);
         }
 
+        // Handle TeraBox Remote path mapping
+        if (!empty($updateData['storage_folder'])) {
+            $remotePrefix = config('terabox.remote_dir', '/Apps/Krettel');
+            $path = trim($updateData['storage_folder']);
+            if (!str_starts_with($path, '/')) {
+                $path = rtrim($remotePrefix, '/') . '/' . $path;
+            }
+            $updateData['storage_folder'] = $path;
+            $updateData['video_url'] = 'terabox-remote';
+        }
+
         $video->update($updateData);
+
+        // Handle replacing local video file
+        if ($request->hasFile('video_file')) {
+            $file = $request->file('video_file');
+            $stagingPath = $file->store('pending-uploads');
+            $video->update(['video_url' => 'processing']);
+            \App\Jobs\UploadVideoToTeraBox::dispatch($video, $stagingPath);
+        }
 
         $previews = collect($request->input('previews', []))
             ->filter(fn ($url) => is_string($url) && trim($url) !== '')

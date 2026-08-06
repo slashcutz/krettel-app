@@ -34,40 +34,62 @@
                         <form action="{{ route('upload.store') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
                             @csrf
                             
-                            <!-- Step 1: Media Upload -->
-                            <div x-show="step === 1" x-transition.opacity.duration.300ms>
-                                <h3 class="text-xl font-bold text-white mb-6">Media Upload</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div @click="triggerFile('video_file_input')" class="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-primary transition-colors cursor-pointer group">
-                                        <svg class="w-10 h-10 text-muted group-hover:text-primary mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                                        <template x-if="!videoPreview">
-                                            <div class="text-center">
-                                                <p class="text-white font-medium">Upload Video File</p>
-                                                <p class="text-xs text-muted mt-1">MP4, MKV up to 4GB</p>
-                                            </div>
-                                        </template>
-                                        <template x-if="videoPreview">
-                                            <video :src="videoPreview" class="w-full max-h-48 rounded-lg object-contain bg-black" controls></video>
-                                        </template>
-                                        <p x-show="videoFile" class="text-xs text-success font-medium mt-2" x-text="videoFile ? 'Selected: ' + videoFile.name : ''"></p>
-                                        <input type="file" id="video_file_input" name="video_file" accept="video/*" @change="onVideoSelect($event)" class="hidden">
-                                    </div>
-                                    <div @click="triggerFile('thumbnail_file_input')" class="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-primary transition-colors cursor-pointer group">
-                                        <svg class="w-10 h-10 text-muted group-hover:text-primary mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                        <template x-if="!thumbnailFile">
-                                            <div class="text-center">
-                                                <p class="text-white font-medium">Upload Thumbnail</p>
-                                                <p class="text-xs text-muted mt-1">JPG, PNG (16:9)</p>
-                                            </div>
-                                        </template>
-                                        <template x-if="thumbnailFile">
-                                            <img :src="thumbnailPreview" class="w-full max-h-48 rounded-lg object-cover">
-                                        </template>
-                                        <p x-show="thumbnailFile" x-text="thumbnailFile ? 'Selected: ' + thumbnailFile.name : ''" class="text-xs text-gray-400 font-medium mt-2"></p>
-                                        <input type="file" id="thumbnail_file_input" name="thumbnail" accept="image/*" @change="onThumbnailSelect($event)" class="hidden">
-                                    </div>
-                                </div>
-                            </div>
+                             <!-- Step 1: Media Upload -->
+                             <div x-show="step === 1" x-transition.opacity.duration.300ms x-data="{ mediaSource: 'upload' }">
+                                 <h3 class="text-xl font-bold text-white mb-4">Media Upload</h3>
+                                 
+                                 <!-- Source selector tabs -->
+                                 <div class="flex bg-secondary/40 rounded-xl p-1 mb-6 max-w-md border border-white/5">
+                                     <button type="button" @click="mediaSource = 'upload'" class="flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all" :class="mediaSource === 'upload' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-white'">Upload Video File</button>
+                                     <button type="button" @click="mediaSource = 'terabox'" class="flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all" :class="mediaSource === 'terabox' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-white'">Link Existing TeraBox File</button>
+                                 </div>
+
+                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                     <!-- Video Selection Slot -->
+                                     <div>
+                                         <template x-if="mediaSource === 'upload'">
+                                             <div @click="triggerFile('video_file_input')" class="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-primary transition-colors cursor-pointer group min-h-[180px]">
+                                                 <svg class="w-10 h-10 text-muted group-hover:text-primary mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                                 <template x-if="!videoPreview">
+                                                     <div class="text-center">
+                                                         <p class="text-white font-medium">Upload Video File</p>
+                                                         <p class="text-xs text-muted mt-1">MP4, MKV up to 4GB</p>
+                                                     </div>
+                                                 </template>
+                                                 <template x-if="videoPreview">
+                                                     <video :src="videoPreview" class="w-full max-h-48 rounded-lg object-contain bg-black" controls></video>
+                                                 </template>
+                                                 <p x-show="videoFile" class="text-xs text-success font-medium mt-2" x-text="videoFile ? 'Selected: ' + videoFile.name : ''"></p>
+                                                 <input type="file" id="video_file_input" name="video_file" accept="video/*" @change="onVideoSelect($event)" class="hidden">
+                                             </div>
+                                         </template>
+
+                                         <template x-if="mediaSource === 'terabox'">
+                                             <div class="bg-secondary/20 border border-border rounded-xl p-6 min-h-[180px] flex flex-col justify-center">
+                                                 <label for="terabox_file_path" class="block text-sm font-medium text-white mb-2">TeraBox File Name or Path</label>
+                                                 <input type="text" name="terabox_file_path" id="terabox_file_path" placeholder="e.g. Captain_America.mp4" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                                                 <p class="text-[10px] text-muted mt-2">Upload the file directly to your TeraBox account inside <code>/Apps/Krettel/</code> first, then paste the file name here to make linking instant!</p>
+                                             </div>
+                                         </template>
+                                     </div>
+
+                                     <!-- Thumbnail Upload Slot -->
+                                     <div @click="triggerFile('thumbnail_file_input')" class="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-primary transition-colors cursor-pointer group min-h-[180px]">
+                                         <svg class="w-10 h-10 text-muted group-hover:text-primary mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                         <template x-if="!thumbnailFile">
+                                             <div class="text-center">
+                                                 <p class="text-white font-medium">Upload Thumbnail</p>
+                                                 <p class="text-xs text-muted mt-1">JPG, PNG (16:9)</p>
+                                             </div>
+                                         </template>
+                                         <template x-if="thumbnailFile">
+                                             <img :src="thumbnailPreview" class="w-full max-h-48 rounded-lg object-cover">
+                                         </template>
+                                         <p x-show="thumbnailFile" x-text="thumbnailFile ? 'Selected: ' + thumbnailFile.name : ''" class="text-xs text-gray-400 font-medium mt-2"></p>
+                                         <input type="file" id="thumbnail_file_input" name="thumbnail" accept="image/*" @change="onThumbnailSelect($event)" class="hidden">
+                                     </div>
+                                 </div>
+                             </div>
 
                             <!-- Step 2: Basic Details -->
                             <div x-show="step === 2" x-transition.opacity.duration.300ms style="display: none;">
