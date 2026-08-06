@@ -283,7 +283,11 @@ class VideoController extends Controller
 
         try {
             $terabox = app(TeraBoxClient::class);
-            $dlink = $terabox->getDirectLink($video->storage_folder);
+            if (str_starts_with($video->storage_folder, 'http://') || str_starts_with($video->storage_folder, 'https://')) {
+                $dlink = $terabox->getLinkFromShare($video->storage_folder);
+            } else {
+                $dlink = $terabox->getDirectLink($video->storage_folder);
+            }
             return redirect()->away($dlink);
         } catch (\Throwable $e) {
             $dbNdus = \App\Models\Setting::get('terabox_ndus');
