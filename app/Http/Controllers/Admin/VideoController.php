@@ -88,9 +88,16 @@ class VideoController extends Controller
         $updateData = $request->only([
             'title', 'slug', 'short_description', 'full_description', 'category_id',
             'release_date', 'age_rating', 'video_type', 'resolution', 'quality',
-            'visibility', 'thumbnail', 'poster', 'trailer_url', 'terabox_image',
-            'storage_folder',
+            'visibility',
         ]);
+
+        // Only overwrite these URL/path fields when the user explicitly provides a new value
+        foreach (['thumbnail', 'poster', 'trailer_url', 'terabox_image', 'storage_folder'] as $optionalField) {
+            $value = $request->input($optionalField);
+            if (!is_null($value) && trim($value) !== '') {
+                $updateData[$optionalField] = $value;
+            }
+        }
 
         if ($request->hasFile('thumbnail_file')) {
             $path = $request->file('thumbnail_file')->store('thumbnails', 'public');
