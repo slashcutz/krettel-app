@@ -107,12 +107,25 @@
                             this.isPlaying = false;
                         });
 
-                        // ESC key to exit fullscreen
+                        // Listen to browser fullscreen changes to sync orientation/controls
+                        const onFsChange = () => {
+                            this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                            if (this.isFullscreen) {
+                                document.body.style.overflow = 'hidden';
+                                this.rotateToLandscape();
+                            } else {
+                                document.body.style.overflow = '';
+                                this.unrotate();
+                            }
+                        };
+                        document.addEventListener('fullscreenchange', onFsChange);
+                        document.addEventListener('webkitfullscreenchange', onFsChange);
+
+                        // ESC key fallback
                         document.addEventListener('keydown', (e) => {
                             if (e.key === 'Escape' && this.isFullscreen) {
                                 e.preventDefault();
-                                this.isFullscreen = false;
-                                document.body.style.overflow = '';
+                                this.toggleFullscreen();
                             }
                         });
 
@@ -423,15 +436,24 @@
                     },
 
                     toggleFullscreen() {
-                        this.isFullscreen = !this.isFullscreen;
-                        if (this.isFullscreen) {
+                        const container = this.$refs.videoContainer;
+                        if (!container) return;
+
+                        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                             if (this.miniPlayer) this.miniPlayer = false;
-                            document.body.style.overflow = 'hidden';
                             this.showControls = true;
-                            this.rotateToLandscape();
+                            
+                            if (container.requestFullscreen) {
+                                container.requestFullscreen();
+                            } else if (container.webkitRequestFullscreen) {
+                                container.webkitRequestFullscreen();
+                            }
                         } else {
-                            document.body.style.overflow = '';
-                            this.unrotate();
+                            if (document.exitFullscreen) {
+                                document.exitFullscreen();
+                            } else if (document.webkitExitFullscreen) {
+                                document.webkitExitFullscreen();
+                            }
                         }
                     },
 
@@ -684,6 +706,7 @@
             <div class="transition-all duration-300 ease-in-out"
                  :class="miniPlayer ? 'fixed z-[60] bottom-20 sm:bottom-4 inset-x-0 sm:inset-x-auto sm:right-4 w-full sm:w-96 px-3 sm:px-0' : 'w-full lg:px-4 lg:pt-4'">
             <div class="w-full bg-black flex justify-center items-center relative shadow-2xl video-container"
+                 x-ref="videoContainer"
                  :class="{
                     'aspect-video': !isFullscreen,
                     'max-h-none rounded-xl ring-1 ring-zinc-800': miniPlayer && !isFullscreen,
