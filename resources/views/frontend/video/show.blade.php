@@ -882,11 +882,11 @@
                     </div>
                 </div>
 
-                <!-- Progress Bar at absolute bottom -->
-                <div class="absolute bottom-0 left-0 right-0 z-30 pointer-events-auto group/progress overflow-hidden rounded-b-xl"
+                <!-- Progress Bar at absolute bottom (with taller h-8 touch target for mobile responsiveness) -->
+                <div class="absolute bottom-0 left-0 right-0 h-8 z-30 pointer-events-auto group/progress flex items-end cursor-pointer"
                      @mousedown.prevent="startDrag($event)"
                      @touchstart.prevent="startDrag($event.touches[0])">
-                    <div class="progress-bar-container m-0 h-[6px] group-hover/progress:h-2 rounded-none bg-zinc-800" x-ref="progressContainer">
+                    <div class="progress-bar-container w-full m-0 h-[6px] group-hover/progress:h-2 rounded-none bg-zinc-800" x-ref="progressContainer">
                         <div class="progress-filled bg-red-600 h-full transition-none" :class="{ 'transition-none': isDragging }" :style="`width: ${isNaN(progress) ? 0 : progress}%`"></div>
                     </div>
                 </div>
