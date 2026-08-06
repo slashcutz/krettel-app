@@ -33,7 +33,7 @@
             <!-- Video Sections -->
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-20 space-y-12">
                 
-                <!-- Continue Watching (Matching watch page UI + Swiper Scroll Indicator) -->
+                <!-- Continue Watching (Matching watch page UI + Desktop & Mobile Swiper) -->
                 @if(isset($watchHistory) && $watchHistory->isNotEmpty())
                 <section x-data="{ 
                             scrollProgress: 0,
@@ -42,63 +42,85 @@
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            },
+                            slideLeft() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: -450, behavior: 'smooth' });
+                            },
+                            slideRight() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
                          x-init="$nextTick(() => updateScroll())"
-                         class="space-y-3">
+                         class="space-y-3 relative group">
                     <div class="flex items-center justify-between">
-                        <h2 class="text-sm font-bold text-white tracking-wide">Continue Watching</h2>
+                        <h2 class="text-sm md:text-base font-bold text-white tracking-wide">Continue Watching</h2>
                         <a href="{{ route('my-list') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
 
-                    <div class="flex space-x-3 overflow-x-auto no-scrollbar py-2"
-                         x-ref="rail"
-                         @scroll.passive="updateScroll()">
-                        @foreach($watchHistory as $history)
-                            @if($history->video)
-                                @php
-                                    $v = $history->video;
-                                    $img = $v->poster ?: $v->thumbnail ?: $v->terabox_image;
-                                    $imgUrl = $img ? \App\Support\TeraBoxImage::url($img, 'video', $v->id) : 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=300&auto=format&fit=crop';
-                                    
-                                    // Calculate progress
-                                    $progressPct = 0;
-                                    $timeLeft = '';
-                                    if ($v->duration > 0 && $history->progress > 0) {
-                                        $progressPct = min(100, max(20, ($history->progress / $v->duration) * 100));
-                                        $remaining = $v->duration - $history->progress;
-                                        if ($remaining > 0) {
-                                            $minutes = ceil($remaining / 60);
-                                            if ($minutes >= 60) {
-                                                $hours = floor($minutes / 60);
-                                                $mins = $minutes % 60;
-                                                $timeLeft = "{$hours}h {$mins}m left";
-                                            } else {
-                                                $timeLeft = "{$minutes}m left";
+                    <div class="relative">
+                        <!-- Desktop Slide Left Button -->
+                        <button @click="slideLeft()" 
+                                aria-label="Slide Left"
+                                class="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                        </button>
+
+                        <div class="flex space-x-3 overflow-x-auto no-scrollbar py-2 scroll-smooth"
+                             x-ref="rail"
+                             @scroll.passive="updateScroll()">
+                            @foreach($watchHistory as $history)
+                                @if($history->video)
+                                    @php
+                                        $v = $history->video;
+                                        $img = $v->poster ?: $v->thumbnail ?: $v->terabox_image;
+                                        $imgUrl = $img ? \App\Support\TeraBoxImage::url($img, 'video', $v->id) : 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=300&auto=format&fit=crop';
+                                        
+                                        // Calculate progress
+                                        $progressPct = 0;
+                                        $timeLeft = '';
+                                        if ($v->duration > 0 && $history->progress > 0) {
+                                            $progressPct = min(100, max(20, ($history->progress / $v->duration) * 100));
+                                            $remaining = $v->duration - $history->progress;
+                                            if ($remaining > 0) {
+                                                $minutes = ceil($remaining / 60);
+                                                if ($minutes >= 60) {
+                                                    $hours = floor($minutes / 60);
+                                                    $mins = $minutes % 60;
+                                                    $timeLeft = "{$hours}h {$mins}m left";
+                                                } else {
+                                                    $timeLeft = "{$minutes}m left";
+                                                }
                                             }
+                                        } else {
+                                            $progressPct = 40; // Default sample progress for UI display
                                         }
-                                    } else {
-                                        $progressPct = 40; // Default sample progress for UI display
-                                    }
-                                @endphp
-                                <a href="{{ route('video.show', $v->slug ?: $v->id) }}" 
-                                   class="min-w-[210px] max-w-[210px] bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2 flex items-center space-x-3 relative overflow-hidden group cursor-pointer transition hover:border-zinc-600 flex-shrink-0">
-                                    <div class="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
-                                        <img src="{{ $imgUrl }}" alt="{{ $v->title }}" class="w-full h-full object-cover" loading="eager" fetchpriority="high" decoding="async">
-                                        <div class="absolute inset-0 bg-black/20 flex items-center justify-center">
-                                            <svg class="w-4 h-4 fill-white text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                    @endphp
+                                    <a href="{{ route('video.show', $v->slug ?: $v->id) }}" 
+                                       class="min-w-[210px] max-w-[210px] bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2 flex items-center space-x-3 relative overflow-hidden group/card cursor-pointer transition hover:border-zinc-600 flex-shrink-0">
+                                        <div class="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
+                                            <img src="{{ $imgUrl }}" alt="{{ $v->title }}" class="w-full h-full object-cover" loading="eager" fetchpriority="high" decoding="async">
+                                            <div class="absolute inset-0 bg-black/20 flex items-center justify-center">
+                                                <svg class="w-4 h-4 fill-white text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <h3 class="text-xs font-bold text-white truncate">{{ $v->title }}</h3>
-                                        <p class="text-[11px] text-zinc-400 mt-0.5">{{ $timeLeft ?: ($v->duration ? gmdate('H:i', $v->duration) : 'Movie') }}</p>
-                                        <div class="w-full h-1 bg-zinc-800 rounded-full mt-2 overflow-hidden">
-                                            <div class="bg-red-600 h-full" style="width: {{ $progressPct }}%"></div>
+                                        <div class="flex-1 min-w-0">
+                                            <h3 class="text-xs font-bold text-white truncate">{{ $v->title }}</h3>
+                                            <p class="text-[11px] text-zinc-400 mt-0.5">{{ $timeLeft ?: ($v->duration ? gmdate('H:i', $v->duration) : 'Movie') }}</p>
+                                            <div class="w-full h-1 bg-zinc-800 rounded-full mt-2 overflow-hidden">
+                                                <div class="bg-red-600 h-full" style="width: {{ $progressPct }}%"></div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </a>
-                            @endif
-                        @endforeach
+                                    </a>
+                                @endif
+                            @endforeach
+                        </div>
+
+                        <!-- Desktop Slide Right Button -->
+                        <button @click="slideRight()" 
+                                aria-label="Slide Right"
+                                class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                        </button>
                     </div>
 
                     <!-- Swiper Primary Red Progress Bar -->
@@ -132,35 +154,59 @@
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            },
+                            slideLeft() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: -450, behavior: 'smooth' });
+                            },
+                            slideRight() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
                          x-init="$nextTick(() => updateScroll())"
-                         class="space-y-3">
+                         class="space-y-3 relative group">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">Collections</h2>
                         <a href="{{ route('collections.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
-                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1"
-                         x-ref="rail"
-                         @scroll.passive="updateScroll()">
-                        @foreach($collections as $collection)
-                            @php
-                                $cImage = data_get($collection, 'terabox_image') ?: data_get($collection, 'image');
-                                $cImageUrl = $cImage ? \App\Support\TeraBoxImage::url($cImage, 'collection', data_get($collection, 'id')) : 'https://via.placeholder.com/200x200?text=' . urlencode(data_get($collection, 'name'));
-                                $videosCount = $collection->videos ? $collection->videos->count() : 0;
-                            @endphp
-                            <a href="{{ route('collection.show', data_get($collection, 'slug', data_get($collection, 'id', 'sample-collection'))) }}" 
-                               class="w-[calc(50%-8px)] sm:w-auto sm:min-w-[220px] bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-2.5 flex items-center space-x-3 flex-shrink-0 cursor-pointer hover:bg-zinc-800/60 transition block">
-                                <div class="w-12 h-12 rounded-full overflow-hidden relative flex-shrink-0 border border-zinc-700">
-                                    <img src="{{ $cImageUrl }}" alt="{{ data_get($collection, 'name') }}" loading="eager" fetchpriority="high" decoding="async" class="w-full h-full object-cover">
-                                </div>
-                                <div class="min-w-0 flex-1">
-                                    <h3 class="text-xs font-bold text-white truncate">{{ data_get($collection, 'name') }}</h3>
-                                    <p class="text-[10px] text-zinc-400">{{ $videosCount }}+ Titles</p>
-                                </div>
-                            </a>
-                        @endforeach
+
+                    <div class="relative">
+                        <!-- Desktop Slide Left Button -->
+                        <button @click="slideLeft()" 
+                                aria-label="Slide Left"
+                                class="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                        </button>
+
+                        <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1 scroll-smooth"
+                             x-ref="rail"
+                             @scroll.passive="updateScroll()">
+                            @foreach($collections as $collection)
+                                @php
+                                    $cImage = data_get($collection, 'terabox_image') ?: data_get($collection, 'image');
+                                    $cImageUrl = $cImage ? \App\Support\TeraBoxImage::url($cImage, 'collection', data_get($collection, 'id')) : 'https://via.placeholder.com/200x200?text=' . urlencode(data_get($collection, 'name'));
+                                    $videosCount = $collection->videos ? $collection->videos->count() : 0;
+                                @endphp
+                                <a href="{{ route('collection.show', data_get($collection, 'slug', data_get($collection, 'id', 'sample-collection'))) }}" 
+                                   class="w-[calc(50%-8px)] sm:w-auto sm:min-w-[220px] bg-zinc-900/90 border border-zinc-800/80 rounded-2xl p-2.5 flex items-center space-x-3 flex-shrink-0 cursor-pointer hover:bg-zinc-800/60 transition block">
+                                    <div class="w-12 h-12 rounded-full overflow-hidden relative flex-shrink-0 border border-zinc-700">
+                                        <img src="{{ $cImageUrl }}" alt="{{ data_get($collection, 'name') }}" loading="eager" fetchpriority="high" decoding="async" class="w-full h-full object-cover">
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="text-xs font-bold text-white truncate">{{ data_get($collection, 'name') }}</h3>
+                                        <p class="text-[10px] text-zinc-400">{{ $videosCount }}+ Titles</p>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+
+                        <!-- Desktop Slide Right Button -->
+                        <button @click="slideRight()" 
+                                aria-label="Slide Right"
+                                class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                        </button>
                     </div>
+
                     <!-- Swiper Primary Red Progress Bar -->
                     <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
                         <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
@@ -176,25 +222,49 @@
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            },
+                            slideLeft() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: -450, behavior: 'smooth' });
+                            },
+                            slideRight() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
                          x-init="$nextTick(() => updateScroll())"
-                         class="space-y-3">
+                         class="space-y-3 relative group">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">Trending Now</h2>
                         <a href="{{ route('search.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
-                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1"
-                         x-ref="rail"
-                         @scroll.passive="updateScroll()">
-                        @forelse($trending as $video)
-                            <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
-                                <x-video-card :video="$video" />
-                            </div>
-                        @empty
-                            <p class="text-muted">No trending videos yet.</p>
-                        @endforelse
+
+                    <div class="relative">
+                        <!-- Desktop Slide Left Button -->
+                        <button @click="slideLeft()" 
+                                aria-label="Slide Left"
+                                class="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                        </button>
+
+                        <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1 scroll-smooth"
+                             x-ref="rail"
+                             @scroll.passive="updateScroll()">
+                            @forelse($trending as $video)
+                                <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
+                                    <x-video-card :video="$video" />
+                                </div>
+                            @empty
+                                <p class="text-muted">No trending videos yet.</p>
+                            @endforelse
+                        </div>
+
+                        <!-- Desktop Slide Right Button -->
+                        <button @click="slideRight()" 
+                                aria-label="Slide Right"
+                                class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                        </button>
                     </div>
+
                     <!-- Swiper Primary Red Progress Bar -->
                     <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
                         <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
@@ -209,25 +279,49 @@
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            },
+                            slideLeft() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: -450, behavior: 'smooth' });
+                            },
+                            slideRight() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
                          x-init="$nextTick(() => updateScroll())"
-                         class="space-y-3">
+                         class="space-y-3 relative group">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">New Releases</h2>
                         <a href="{{ route('search.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
-                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1"
-                         x-ref="rail"
-                         @scroll.passive="updateScroll()">
-                        @forelse($newReleases as $video)
-                            <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
-                                <x-video-card :video="$video" />
-                            </div>
-                        @empty
-                            <p class="text-muted">No new releases yet.</p>
-                        @endforelse
+
+                    <div class="relative">
+                        <!-- Desktop Slide Left Button -->
+                        <button @click="slideLeft()" 
+                                aria-label="Slide Left"
+                                class="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                        </button>
+
+                        <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1 scroll-smooth"
+                             x-ref="rail"
+                             @scroll.passive="updateScroll()">
+                            @forelse($newReleases as $video)
+                                <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
+                                    <x-video-card :video="$video" />
+                                </div>
+                            @empty
+                                <p class="text-muted">No new releases yet.</p>
+                            @endforelse
+                        </div>
+
+                        <!-- Desktop Slide Right Button -->
+                        <button @click="slideRight()" 
+                                aria-label="Slide Right"
+                                class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                        </button>
                     </div>
+
                     <!-- Swiper Primary Red Progress Bar -->
                     <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
                         <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
@@ -235,14 +329,59 @@
                 </section>
 
                 <!-- Recommended -->
-                <section>
-                    <h2 class="text-xl md:text-2xl font-bold text-white mb-4">Recommended for You</h2>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                        @forelse($recommended as $video)
-                            <x-video-card :video="$video" />
-                        @empty
-                            <p class="text-muted">No recommendations yet.</p>
-                        @endforelse
+                <section x-data="{ 
+                            scrollProgress: 0,
+                            updateScroll() {
+                                const el = this.$refs.rail;
+                                if (!el) return;
+                                const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            },
+                            slideLeft() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: -450, behavior: 'smooth' });
+                            },
+                            slideRight() {
+                                if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
+                            }
+                         }" 
+                         x-init="$nextTick(() => updateScroll())"
+                         class="space-y-3 relative group">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-xl md:text-2xl font-bold text-white">Recommended for You</h2>
+                        <a href="{{ route('search.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
+                    </div>
+
+                    <div class="relative">
+                        <!-- Desktop Slide Left Button -->
+                        <button @click="slideLeft()" 
+                                aria-label="Slide Left"
+                                class="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                        </button>
+
+                        <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1 scroll-smooth"
+                             x-ref="rail"
+                             @scroll.passive="updateScroll()">
+                            @forelse($recommended as $video)
+                                <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
+                                    <x-video-card :video="$video" />
+                                </div>
+                            @empty
+                                <p class="text-muted">No recommendations yet.</p>
+                            @endforelse
+                        </div>
+
+                        <!-- Desktop Slide Right Button -->
+                        <button @click="slideRight()" 
+                                aria-label="Slide Right"
+                                class="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/80 backdrop-blur-md border border-white/20 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-600 hover:border-red-600 hover:scale-110 shadow-xl cursor-pointer">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Swiper Primary Red Progress Bar -->
+                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                        <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
                     </div>
                 </section>
 
