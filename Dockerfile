@@ -27,12 +27,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libfreetype6-dev \
         libonig-dev \
         libsqlite3-dev \
+        libpq-dev \
         curl \
         unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j"$(nproc)" \
         pdo_mysql \
         pdo_sqlite \
+        pdo_pgsql \
+        pgsql \
         bcmath \
         mbstring \
         exif \
