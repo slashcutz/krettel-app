@@ -951,7 +951,7 @@
 
                         <!-- Left Column: Details -->
                         <div class="flex-1 min-w-0 space-y-4">
-                            <div class="flex items-start justify-between gap-4">
+                            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                                 <div class="flex-1 min-w-0">
                                     <h1 class="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight text-white">{{ $video->title ?? 'Video Title' }}</h1>
 
@@ -972,7 +972,7 @@
                                 </div>
 
                                 <!-- Action Items (Watchlist, Share, Download) -->
-                                <div class="flex items-center space-x-4 text-zinc-400 pt-1 flex-shrink-0">
+                                <div class="flex items-center space-x-6 text-zinc-400 pt-1 sm:pt-2 flex-shrink-0 self-start sm:self-auto">
                                     <button x-data="myListToggle({{ $video->id }})" @click="toggle()" class="flex flex-col items-center space-y-1 hover:text-white transition" :class="{ 'text-primary': inList }">
                                         <svg x-show="!inList" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                                         <svg x-show="inList" x-cloak class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
