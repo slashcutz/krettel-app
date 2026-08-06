@@ -12,18 +12,23 @@
 #
 # Overridable via env vars (run before the script):
 #     GIT_REPO=https://github.com/YOUR_ORG/YOUR_REPO.git   (required)
+#     GIT_TOKEN=ghp_xxx                             (optional; PAT for private repos)
 #     BRANCH=main
 #     APP_DIR=/var/www/krettel
 #     DB_NAME=krettel_app   DB_USER=krettel   DB_PASS=(auto-generated)
 #     APP_URL=http://<public-ip>
 #     TERABOX_EMAIL=... TERABOX_PASSWORD=... TERABOX_NDUS=...
 #     TERABOX_REMOTE_DIR=/Apps/Krettel TERABOX_WEB_HOST=https://www.1024terabox.com
+#
+# TeraBox creds can alternatively be written to /root/terabox.env (see
+# scripts/terabox-creds.sh); this script sources it automatically.
 # =============================================================================
 
 set -euo pipefail
 
 # ------------------------------- Configuration ------------------------------
 GIT_REPO="${GIT_REPO:-https://github.com/YOUR_ORG/YOUR_REPO.git}"
+GIT_TOKEN="${GIT_TOKEN:-}"
 BRANCH="${BRANCH:-main}"
 APP_DIR="${APP_DIR:-/var/www/krettel}"
 DB_NAME="${DB_NAME:-krettel_app}"
@@ -31,6 +36,12 @@ DB_USER="${DB_USER:-krettel}"
 DB_PASS="${DB_PASS:-$(openssl rand -hex 16)}"
 TERABOX_REMOTE_DIR="${TERABOX_REMOTE_DIR:-/Apps/Krettel}"
 TERABOX_WEB_HOST="${TERABOX_WEB_HOST:-https://www.1024terabox.com}"
+
+# TeraBox credentials saved by terabox-creds.sh are picked up automatically.
+if [ -f /root/terabox.env ]; then
+    # shellcheck disable=SC1091
+    . /root/terabox.env
+fi
 
 CRED_FILE="/root/krettel-credentials.txt"
 
@@ -116,11 +127,24 @@ log "Credentials saved to ${CRED_FILE}"
 # ------------------------------- Application ---------------------------------
 log "Fetching application code (branch ${BRANCH})..."
 mkdir -p "$(dirname "${APP_DIR}")"
+
+# Auth wrapper: private repos use GIT_TOKEN via http.extraHeader so the token
+# never lands in the URL, .git/config, or the process list.
+run_git() {
+    if [ -n "${GIT_TOKEN}" ]; then
+        local basic
+        basic="$(printf 'x-access-token:%s' "${GIT_TOKEN}" | base64 -w0)"
+        git -c "http.extraHeader=Authorization: Basic ${basic}" "$@"
+    else
+        git "$@"
+    fi
+}
+
 if [ ! -d "${APP_DIR}/vendor" ] && [ ! -f "${APP_DIR}/artisan" ]; then
-    git clone -b "${BRANCH}" "${GIT_REPO}" "${APP_DIR}"
+    run_git clone -b "${BRANCH}" "${GIT_REPO}" "${APP_DIR}"
 else
     log "App already present at ${APP_DIR} — skipping clone."
-    git -C "${APP_DIR}" pull --ff-only || true
+    run_git -C "${APP_DIR}" pull --ff-only || true
 fi
 cd "${APP_DIR}"
 
