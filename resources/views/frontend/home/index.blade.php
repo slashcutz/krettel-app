@@ -37,10 +37,12 @@
                 @if(isset($watchHistory) && $watchHistory->isNotEmpty())
                 <section x-data="{ 
                             scrollProgress: 0,
+                            hasOverflow: false,
                             updateScroll() {
                                 const el = this.$refs.rail;
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.hasOverflow = maxScroll > 2;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
                             },
                             slideLeft() {
@@ -50,7 +52,7 @@
                                 if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
-                         x-init="$nextTick(() => updateScroll())"
+                         x-init="$nextTick(() => updateScroll())" @resize.window="updateScroll()"
                          class="space-y-3 relative group">
                     <div class="flex items-center justify-between">
                         <h2 class="text-sm md:text-base font-bold text-white tracking-wide">Continue Watching</h2>
@@ -124,7 +126,7 @@
                     </div>
 
                     <!-- Swiper Primary Red Progress Bar -->
-                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                    <div x-show="hasOverflow" x-transition class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
                         <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
                     </div>
                 </section>
@@ -149,10 +151,12 @@
                 <section id="collections" 
                          x-data="{ 
                             scrollProgress: 0,
+                            hasOverflow: false,
                             updateScroll() {
                                 const el = this.$refs.rail;
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.hasOverflow = maxScroll > 2;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
                             },
                             slideLeft() {
@@ -162,7 +166,7 @@
                                 if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
-                         x-init="$nextTick(() => updateScroll())"
+                         x-init="$nextTick(() => updateScroll())" @resize.window="updateScroll()"
                          class="space-y-3 relative group">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">Collections</h2>
@@ -208,7 +212,7 @@
                     </div>
 
                     <!-- Swiper Primary Red Progress Bar -->
-                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                    <div x-show="hasOverflow" x-transition class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
                         <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
                     </div>
                 </section>
@@ -217,10 +221,12 @@
                 <!-- Trending Now -->
                 <section x-data="{ 
                             scrollProgress: 0,
+                            hasOverflow: false,
                             updateScroll() {
                                 const el = this.$refs.rail;
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.hasOverflow = maxScroll > 2;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
                             },
                             slideLeft() {
@@ -230,7 +236,7 @@
                                 if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
-                         x-init="$nextTick(() => updateScroll())"
+                         x-init="$nextTick(() => updateScroll())" @resize.window="updateScroll()"
                          class="space-y-3 relative group">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">Trending Now</h2>
@@ -266,7 +272,7 @@
                     </div>
 
                     <!-- Swiper Primary Red Progress Bar -->
-                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                    <div x-show="hasOverflow" x-transition class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
                         <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
                     </div>
                 </section>
@@ -274,10 +280,12 @@
                 <!-- New Releases -->
                 <section x-data="{ 
                             scrollProgress: 0,
+                            hasOverflow: false,
                             updateScroll() {
                                 const el = this.$refs.rail;
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.hasOverflow = maxScroll > 2;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
                             },
                             slideLeft() {
@@ -287,7 +295,7 @@
                                 if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
-                         x-init="$nextTick(() => updateScroll())"
+                         x-init="$nextTick(() => updateScroll())" @resize.window="updateScroll()"
                          class="space-y-3 relative group">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">New Releases</h2>
@@ -323,7 +331,7 @@
                     </div>
 
                     <!-- Swiper Primary Red Progress Bar -->
-                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                    <div x-show="hasOverflow" x-transition class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
                         <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
                     </div>
                 </section>
@@ -331,10 +339,12 @@
                 <!-- Recommended -->
                 <section x-data="{ 
                             scrollProgress: 0,
+                            hasOverflow: false,
                             updateScroll() {
                                 const el = this.$refs.rail;
                                 if (!el) return;
                                 const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.hasOverflow = maxScroll > 2;
                                 this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
                             },
                             slideLeft() {
@@ -344,7 +354,7 @@
                                 if (this.$refs.rail) this.$refs.rail.scrollBy({ left: 450, behavior: 'smooth' });
                             }
                          }" 
-                         x-init="$nextTick(() => updateScroll())"
+                         x-init="$nextTick(() => updateScroll())" @resize.window="updateScroll()"
                          class="space-y-3 relative group">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">Recommended for You</h2>
@@ -380,7 +390,7 @@
                     </div>
 
                     <!-- Swiper Primary Red Progress Bar -->
-                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                    <div x-show="hasOverflow" x-transition class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
                         <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
                     </div>
                 </section>
