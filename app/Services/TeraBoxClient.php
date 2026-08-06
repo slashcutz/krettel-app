@@ -135,8 +135,8 @@ class TeraBoxClient
             return;
         }
 
-        $email = config('terabox.email');
-        $password = config('terabox.password');
+        $email = \App\Models\Setting::get('terabox_email') ?: config('terabox.email');
+        $password = \App\Models\Setting::get('terabox_password') ?: config('terabox.password');
         if ($email && $password) {
             $this->login($email, $password);
             return;
