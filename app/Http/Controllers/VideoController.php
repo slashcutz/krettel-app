@@ -286,8 +286,10 @@ class VideoController extends Controller
             $dlink = $terabox->getDirectLink($video->storage_folder);
             return redirect()->away($dlink);
         } catch (\Throwable $e) {
+            $dbNdus = \App\Models\Setting::get('terabox_ndus');
+            $configNdus = config('terabox.ndus');
             Log::error('[STREAM-DIRECT] Failed: ' . $e->getMessage());
-            abort(502, 'Failed to resolve high quality stream: ' . $e->getMessage());
+            abort(502, 'Failed: ' . $e->getMessage() . ' (DB NDUS: ' . substr($dbNdus, 0, 10) . '..., Config NDUS: ' . substr($configNdus, 0, 10) . '...)');
         }
     }
 }
