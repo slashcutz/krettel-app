@@ -356,26 +356,19 @@ class VideoController extends Controller
             }
 
             return response()->stream(function () use ($stream) {
-                // Turn off PHP output buffering execution limits
+                // Disable limits and compression
                 if (function_exists('apache_setenv')) {
                     @apache_setenv('no-gzip', 1);
                 }
                 @ini_set('zlib.output_compression', 'Off');
                 @ob_implicit_flush(true);
                 
-                // Clear any existing output buffers
                 while (ob_get_level() > 0) {
                     ob_end_clean();
                 }
 
-                // Stream in 256KB chunks for faster buffering
-                while (!feof($stream)) {
-                    if (connection_aborted()) {
-                        break;
-                    }
-                    echo fread($stream, 262144); // 256KB
-                    flush();
-                }
+                // Native stream piping to output buffer
+                fpassthru($stream);
                 fclose($stream);
             }, $statusCode, $headers);
 
