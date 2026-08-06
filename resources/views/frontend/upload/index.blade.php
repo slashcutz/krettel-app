@@ -1,0 +1,501 @@
+<x-admin-layout>
+    <x-slot name="header">Upload Video</x-slot>
+    <div class="py-2" x-data="videoUploadWizard()">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-card overflow-hidden shadow-sm sm:rounded-lg border border-border">
+                
+                <!-- Wizard Header / Progress -->
+                <div class="border-b border-border bg-secondary/50 p-6 flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-white">Upload Video</h2>
+                    <div class="flex items-center space-x-2 text-sm">
+                        <span class="text-muted">Step</span>
+                        <span class="text-white font-bold px-2 py-1 bg-primary rounded-md" x-text="step"></span>
+                        <span class="text-muted">of 7</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col md:flex-row min-h-[600px]">
+                    <!-- Sidebar Navigation -->
+                    <div class="w-full md:w-64 border-r border-border bg-secondary/20 p-4 space-y-2">
+                        <template x-for="(s, index) in steps" :key="index">
+                            <button 
+                                @click="step = index + 1"
+                                class="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between"
+                                :class="step === (index + 1) ? 'bg-primary text-white font-medium shadow-md' : 'text-muted hover:bg-secondary hover:text-white'"
+                            >
+                                <span x-text="s"></span>
+                                <svg x-show="step > (index + 1)" class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- Main Form Area -->
+                    <div class="flex-1 p-6 md:p-10 relative">
+                        <form action="{{ route('upload.store') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
+                            @csrf
+                            
+                            <!-- Step 1: Media Upload -->
+                            <div x-show="step === 1" x-transition.opacity.duration.300ms>
+                                <h3 class="text-xl font-bold text-white mb-6">Media Upload</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div @click="triggerFile('video_file_input')" class="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-primary transition-colors cursor-pointer group">
+                                        <svg class="w-10 h-10 text-muted group-hover:text-primary mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                        <template x-if="!videoPreview">
+                                            <div class="text-center">
+                                                <p class="text-white font-medium">Upload Video File</p>
+                                                <p class="text-xs text-muted mt-1">MP4, MKV up to 4GB</p>
+                                            </div>
+                                        </template>
+                                        <template x-if="videoPreview">
+                                            <video :src="videoPreview" class="w-full max-h-48 rounded-lg object-contain bg-black" controls></video>
+                                        </template>
+                                        <p x-show="videoFile" class="text-xs text-success font-medium mt-2" x-text="videoFile ? 'Selected: ' + videoFile.name : ''"></p>
+                                        <input type="file" id="video_file_input" name="video_file" accept="video/*" @change="onVideoSelect($event)" class="hidden">
+                                    </div>
+                                    <div @click="triggerFile('thumbnail_file_input')" class="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-primary transition-colors cursor-pointer group">
+                                        <svg class="w-10 h-10 text-muted group-hover:text-primary mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                        <template x-if="!thumbnailFile">
+                                            <div class="text-center">
+                                                <p class="text-white font-medium">Upload Thumbnail</p>
+                                                <p class="text-xs text-muted mt-1">JPG, PNG (16:9)</p>
+                                            </div>
+                                        </template>
+                                        <template x-if="thumbnailFile">
+                                            <img :src="thumbnailPreview" class="w-full max-h-48 rounded-lg object-cover">
+                                        </template>
+                                        <p x-show="thumbnailFile" x-text="thumbnailFile ? 'Selected: ' + thumbnailFile.name : ''" class="text-xs text-gray-400 font-medium mt-2"></p>
+                                        <input type="file" id="thumbnail_file_input" name="thumbnail" accept="image/*" @change="onThumbnailSelect($event)" class="hidden">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: Basic Details -->
+                            <div x-show="step === 2" x-transition.opacity.duration.300ms style="display: none;">
+                                <h3 class="text-xl font-bold text-white mb-6">Basic Details</h3>
+                                <div class="space-y-4">
+                                    <div class="grid grid-cols-1 gap-4">
+                                        <div>
+                                            <x-input-label for="terabox_image" value="TeraBox Image URL (optional)" />
+                                            <x-text-input id="terabox_image" class="block mt-1 w-full" type="text" name="terabox_image" placeholder="https://... or terabox://remote/path" />
+                                        </div>
+                                        <div>
+                                            <x-input-label for="previews" value="Preview Images (optional, shown randomly on cards)" />
+                                            <input type="text" name="previews[]" class="block mt-1 w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 mb-2" placeholder="Preview 1 URL">
+                                            <input type="text" name="previews[]" class="block mt-1 w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 mb-2" placeholder="Preview 2 URL">
+                                            <input type="text" name="previews[]" class="block mt-1 w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50" placeholder="Preview 3 URL">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <x-input-label for="title" value="Title" />
+                                        <x-text-input id="title" x-ref="title" class="block mt-1 w-full" type="text" name="title" required />
+                                        @if($errors->has('title'))
+                                            <p class="text-primary text-xs mt-1">{{ $errors->first('title') }}</p>
+                                        @endif
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <x-input-label for="category" value="Category" />
+                                            <select name="category_id" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50">
+                                                @forelse($categories as $cat)
+                                                    <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                                                @empty
+                                                    <option value="1">Movies</option>
+                                                    <option value="2">TV Shows</option>
+                                                @endforelse
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <x-input-label for="age_rating" value="Age Rating" />
+                                            <select name="age_rating" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50">
+                                                <option value="G">G</option>
+                                                <option value="PG">PG</option>
+                                                <option value="PG-13">PG-13</option>
+                                                <option value="R">R</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <x-input-label for="description" value="Full Description" />
+                                        <textarea id="description" name="full_description" rows="5" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring-primary"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Streaming -->
+                            <div x-show="step === 3" x-transition.opacity.duration.300ms style="display: none;">
+                                <h3 class="text-xl font-bold text-white mb-6">Streaming Specs</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <x-input-label for="resolution" value="Resolution" />
+                                        <select name="resolution" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
+                                            <option value="4K">4K</option>
+                                            <option value="1080p">1080p</option>
+                                            <option value="720p">720p</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <x-input-label for="storage" value="Storage Provider" />
+                                        <select name="storage_provider" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
+                                            <option value="local">Local Storage</option>
+                                            <option value="terabox" selected>TeraBox (Cloud)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 4: Multiple Audio -->
+                            <div x-show="step === 4" x-transition.opacity.duration.300ms style="display: none;">
+                                <h3 class="text-xl font-bold text-white mb-6">Audio Tracks</h3>
+                                <div class="space-y-4">
+                                    <div class="border border-border p-4 rounded-lg bg-secondary/30">
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <x-input-label value="Audio Language" />
+                                                <select name="audio_language[]" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
+                                                    <option>English</option>
+                                                    <option>Spanish</option>
+                                                    <option>French</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <x-input-label value="Upload Audio File" />
+                                                <input type="file" name="audio_files[]" class="mt-1 block w-full text-white">
+                                            </div>
+                                        </div>
+                                        <div class="mt-4 flex items-center space-x-2">
+                                            <input type="checkbox" name="default_audio[]" class="rounded border-border text-primary focus:ring-primary bg-secondary">
+                                            <span class="text-white text-sm">Set as Default Audio</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="text-primary text-sm font-medium hover:underline">+ Add another audio track</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 5: Subtitles -->
+                            <div x-show="step === 5" x-transition.opacity.duration.300ms style="display: none;">
+                                <h3 class="text-xl font-bold text-white mb-6">Subtitles</h3>
+                                <div class="space-y-4">
+                                    <div class="border border-border p-4 rounded-lg bg-secondary/30">
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <x-input-label value="Subtitle Language" />
+                                                <select name="subtitle_language[]" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
+                                                    <option>English (CC)</option>
+                                                    <option>Spanish</option>
+                                                    <option>French</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <x-input-label value="Upload Subtitle (.vtt, .srt)" />
+                                                <input type="file" name="subtitle_files[]" class="mt-1 block w-full text-white">
+                                            </div>
+                                        </div>
+                                        <div class="mt-4 flex items-center space-x-2">
+                                            <input type="checkbox" name="default_subtitle[]" class="rounded border-border text-primary focus:ring-primary bg-secondary">
+                                            <span class="text-white text-sm">Set as Default Subtitle</span>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="text-primary text-sm font-medium hover:underline">+ Add another subtitle</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 6: Visibility -->
+                            <div x-show="step === 6" x-transition.opacity.duration.300ms style="display: none;">
+                                <h3 class="text-xl font-bold text-white mb-6">Visibility</h3>
+                                <div class="space-y-4">
+                                    <div class="flex items-center space-x-3 p-4 border border-border rounded-lg hover:border-primary cursor-pointer">
+                                        <input type="radio" name="visibility" value="public" class="text-primary focus:ring-primary bg-secondary border-border" checked>
+                                        <div>
+                                            <h4 class="text-white font-medium">Public</h4>
+                                            <p class="text-xs text-muted">Everyone can see this video.</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-3 p-4 border border-border rounded-lg hover:border-primary cursor-pointer">
+                                        <input type="radio" name="visibility" value="private" class="text-primary focus:ring-primary bg-secondary border-border">
+                                        <div>
+                                            <h4 class="text-white font-medium">Private</h4>
+                                            <p class="text-xs text-muted">Only you and people you choose can watch.</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-3 p-4 border border-border rounded-lg hover:border-primary cursor-pointer">
+                                        <input type="radio" name="visibility" value="scheduled" class="text-primary focus:ring-primary bg-secondary border-border">
+                                        <div>
+                                            <h4 class="text-white font-medium">Scheduled</h4>
+                                            <p class="text-xs text-muted">Select a date to make this video public.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 7: SEO -->
+                            <div x-show="step === 7" x-transition.opacity.duration.300ms style="display: none;">
+                                <h3 class="text-xl font-bold text-white mb-6">SEO & Metadata</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <x-input-label value="SEO Title" />
+                                        <x-text-input class="block mt-1 w-full" type="text" name="seo_title" placeholder="Optimized title for search engines" />
+                                    </div>
+                                    <div>
+                                        <x-input-label value="Meta Description" />
+                                        <textarea name="meta_description" rows="3" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring-primary" placeholder="Brief summary of the video for search results"></textarea>
+                                    </div>
+                                    <div>
+                                        <x-input-label value="Keywords" />
+                                        <x-text-input class="block mt-1 w-full" type="text" name="keywords" placeholder="action, sci-fi, space (comma separated)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="absolute bottom-6 right-6 left-6 md:left-10 flex justify-between border-t border-border pt-4 mt-8 bg-card">
+                                <button type="button" @click="step--" x-show="step > 1" class="px-6 py-2 rounded-lg border border-border text-white hover:bg-secondary transition-colors">
+                                    Back
+                                </button>
+                                <div x-show="step === 1" class="hidden md:block"></div>
+                                
+                                <button type="button" @click="step++" x-show="step < 7" class="px-6 py-2 rounded-lg bg-white text-black font-bold hover:bg-gray-200 transition-colors">
+                                    Next Step
+                                </button>
+                                
+                                <button type="button" @click.prevent="submitForm()" x-show="step === 7" class="px-6 py-2 rounded-lg bg-primary text-white font-bold hover:bg-red-600 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                                    Publish Video
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        function videoUploadWizard() {
+            return {
+                step: 1,
+                steps: [
+                    'Media Upload',
+                    'Basic Details',
+                    'Streaming Specs',
+                    'Audio Tracks',
+                    'Subtitles',
+                    'Visibility',
+                    'SEO & Meta'
+                ],
+                videoFile: null,
+                videoPreview: null,
+                thumbnailFile: null,
+                thumbnailPreview: null,
+                triggerFile(id) {
+                    document.getElementById(id).click();
+                },
+                onVideoSelect(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const MAX_SIZE = 4 * 1024 * 1024 * 1024; // 4GB
+                    if (file.size > MAX_SIZE) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'File too large',
+                            text: 'Maximum upload size is 4GB. Please select a smaller file.',
+                            confirmButtonText: 'OK',
+                            confirmButtonColor: '#e50914',
+                            background: '#1a1a1a',
+                            color: '#fff',
+                        });
+                        e.target.value = '';
+                        return;
+                    }
+                    this.videoFile = file;
+                    if (file.type.startsWith('video/')) {
+                        this.videoPreview = URL.createObjectURL(file);
+                    }
+                    this.autoFillTitle(e);
+                },
+                onThumbnailSelect(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    this.thumbnailFile = file;
+                    this.thumbnailPreview = URL.createObjectURL(file);
+                },
+                autoFillTitle(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const titleInput = this.$refs.title;
+                    if (titleInput && !titleInput.value.trim()) {
+                        let name = file.name.replace(/\.[^.]+$/, '');
+                        name = name.replace(/[_-]+/g, ' ');
+                        titleInput.value = name;
+                    }
+                },
+                submitForm() {
+                    const form = document.getElementById('uploadForm');
+                    const formData = new FormData(form);
+                    const storageChoice = (document.querySelector('[name="storage_provider"]')?.value === 'terabox')
+                        ? 'terabox' : 'local';
+                    const videoFileName = this.videoFile ? this.videoFile.name : 'Video';
+                    const totalFileSize = this.videoFile ? this.videoFile.size : 0;
+
+                    // Track upload start time and speed
+                    let uploadStartTime = Date.now();
+                    let lastLoaded = 0;
+                    let lastTime = uploadStartTime;
+                    let currentSpeed = 0; // bytes per second
+
+                    // Non-blocking persistent toast
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'bottom-end',
+                        showConfirmButton: false,
+                        background: '#1a1a1a',
+                        color: '#fff',
+                        showCloseButton: true,
+                        didOpen: (toast) => {
+                            toast.style.minWidth = '320px';
+                        }
+                    });
+
+                    const formatSize = (bytes) => {
+                        if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+                        if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+                        if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB';
+                        return bytes + ' B';
+                    };
+
+                    const formatETA = (seconds) => {
+                        if (!isFinite(seconds) || seconds <= 0) return 'calculating...';
+                        if (seconds < 60) return Math.ceil(seconds) + 's remaining';
+                        if (seconds < 3600) return Math.ceil(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's remaining';
+                        return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm remaining';
+                    };
+
+                    const formatSpeed = (bytesPerSec) => {
+                        if (bytesPerSec >= 1048576) return (bytesPerSec / 1048576).toFixed(1) + ' MB/s';
+                        if (bytesPerSec >= 1024) return (bytesPerSec / 1024).toFixed(0) + ' KB/s';
+                        return bytesPerSec.toFixed(0) + ' B/s';
+                    };
+
+                    Toast.fire({
+                        icon: 'info',
+                        title: 'Uploading: ' + videoFileName,
+                        html: `
+                            <div class="w-full bg-gray-700 rounded-full h-2 my-2">
+                                <div id="swal-progress-bar" class="bg-primary h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-400">
+                                <span id="swal-progress-text">0%</span>
+                                <span id="swal-size-text">0 / ${formatSize(totalFileSize)}</span>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                <span id="swal-speed-text">Speed: --</span>
+                                <span id="swal-eta-text">ETA: calculating...</span>
+                            </div>
+                        `,
+                    });
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', form.action, true);
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                    
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) {
+                            const now = Date.now();
+                            const percentComplete = Math.round((e.loaded / e.total) * 100);
+                            
+                            // Calculate speed (smoothed)
+                            const timeDiff = (now - lastTime) / 1000; // seconds
+                            if (timeDiff > 0.5) {
+                                const bytesDiff = e.loaded - lastLoaded;
+                                currentSpeed = bytesDiff / timeDiff;
+                                lastLoaded = e.loaded;
+                                lastTime = now;
+                            }
+
+                            // Calculate ETA
+                            const remaining = e.total - e.loaded;
+                            const eta = currentSpeed > 0 ? remaining / currentSpeed : 0;
+
+                            const progressBar = document.getElementById('swal-progress-bar');
+                            const progressText = document.getElementById('swal-progress-text');
+                            const sizeText = document.getElementById('swal-size-text');
+                            const speedText = document.getElementById('swal-speed-text');
+                            const etaText = document.getElementById('swal-eta-text');
+
+                            if (progressBar) progressBar.style.width = percentComplete + '%';
+                            if (progressText) progressText.innerText = percentComplete + '%';
+                            if (sizeText) sizeText.innerText = formatSize(e.loaded) + ' / ' + formatSize(e.total);
+                            if (speedText) speedText.innerText = 'Speed: ' + (currentSpeed > 0 ? formatSpeed(currentSpeed) : '--');
+                            if (etaText) etaText.innerText = 'ETA: ' + formatETA(eta);
+                        }
+                    };
+
+                    xhr.onload = function() {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            Swal.close();
+                            const SuccessToast = Swal.mixin({
+                                toast: true,
+                                position: 'bottom-end',
+                                showConfirmButton: false,
+                                timer: 5000,
+                                timerProgressBar: true,
+                                background: '#1a1a1a',
+                                color: '#fff',
+                            });
+                            SuccessToast.fire({
+                                icon: 'success',
+                                title: 'Upload complete!',
+                                text: storageChoice === 'terabox'
+                                    ? 'TeraBox sync has been queued. Check notifications for progress.'
+                                    : 'Video uploaded successfully.',
+                            });
+                            // Reset form
+                            form.reset();
+                            // Redirect after a short delay so user sees the success message
+                            const response = JSON.parse(xhr.responseText);
+                            setTimeout(() => {
+                                if (response.redirect) window.location.href = response.redirect;
+                            }, 2000);
+                        } else {
+                            Swal.close();
+                            const ErrorToast = Swal.mixin({
+                                toast: true,
+                                position: 'bottom-end',
+                                showConfirmButton: true,
+                                confirmButtonColor: '#e50914',
+                                background: '#1a1a1a',
+                                color: '#fff',
+                            });
+                            ErrorToast.fire({
+                                icon: 'error',
+                                title: 'Upload Failed',
+                                text: 'There was an error processing your upload.',
+                            });
+                        }
+                    };
+
+                    xhr.onerror = function() {
+                        Swal.close();
+                        const ErrorToast = Swal.mixin({
+                            toast: true,
+                            position: 'bottom-end',
+                            showConfirmButton: true,
+                            confirmButtonColor: '#e50914',
+                            background: '#1a1a1a',
+                            color: '#fff',
+                        });
+                        ErrorToast.fire({
+                            icon: 'error',
+                            title: 'Network Error',
+                            text: 'A network error occurred during upload.',
+                        });
+                    };
+
+                    xhr.send(formData);
+                }
+            }
+        }
+    </script>
+</x-admin-layout>

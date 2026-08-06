@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+[x-cloak] { display: none !important; }
+
+/* Desktop: sidebar always shown; Alpine applies -translate-x-full on mobile instead */
+.sidebar-visible { transform: translateX(0) !important; }
+
+/* --- Mobile glassmorphic bottom navigation --- */
+.glass-nav {
+    background: rgba(22, 22, 34, 0.65);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.netflix-red { color: #E50914; }
+.netflix-red-fill { fill: #E50914; color: #E50914; }
+.netflix-glow { filter: drop-shadow(0px 2px 10px rgba(229, 9, 20, 0.7)); }
+
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+

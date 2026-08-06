@@ -1,0 +1,82 @@
+# Render blueprint — deploys the Laravel app as ONE container that runs
+# Nginx + PHP-FPM + the queue worker together, sharing a persistent Disk.
+# This keeps the locally-transcoded HLS files visible to both the worker
+# (which writes them) and the web server (which streams them).
+#
+# Before deploying:
+#   1. Push this repo to GitHub and set `repo` / `branch` below.
+#   2. Render has no managed MySQL — set DB_HOST / DB_DATABASE / DB_USERNAME /
+#      DB_PASSWORD to an external MySQL instance (the env vars are marked
+#      `sync: false`; fill them in the Render dashboard).
+#   3. Set APP_URL to your app's *.onrender.com (or custom domain) URL.
+#   4. Set the TERABOX_* credentials (same as your local .env).
+
+services:
+  - type: web
+    name: krettel-app
+    runtime: docker
+    repo: https://github.com/YOUR_ORG/YOUR_REPO # <- replace
+    branch: main
+    plan: starter
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /login
+    disk:
+      name: krettel-storage
+      mountPath: /var/www/html/storage
+      sizeGB: 10
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        generateValue: true
+      - key: APP_URL
+        sync: false
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: redis
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: REDIS_CLIENT
+        value: phpredis
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: krettel-redis
+          property: connectionString
+      # External MySQL (Render does not manage MySQL)
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      # TeraBox (keep in sync with your local .env)
+      - key: TERABOX_EMAIL
+        sync: false
+      - key: TERABOX_PASSWORD
+        sync: false
+      - key: TERABOX_NDUS
+        sync: false
+      - key: TERABOX_REMOTE_DIR
+        value: /Apps/Krettel
+      - key: TERABOX_WEB_HOST
+        value: https://www.1024terabox.com
+      # FFMPEG_BINARY / FFPROBE_BINARY: intentionally unset — the image ships
+      # ffmpeg/ffprobe on PATH, matching the config defaults.
+
+  # Managed Redis (Key Value) — powers the queue + cache. The internal
+  # connection string is injected into REDIS_URL on the web service above.
+  - type: keyvalue
+    name: krettel-redis
+    plan: free
+    ipAllowList: []

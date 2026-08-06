@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fullscreen Test</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111; color: white; font-family: sans-serif; }
+
+.video-container {
+    position: relative;
+    width: 100%;
+    background: #000;
+}
+
+/* Method 1: CSS-only fullscreen */
+.video-container.is-fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    z-index: 99999 !important;
+    overflow: hidden !important;
+}
+
+.video-container.is-fullscreen video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+}
+</style>
+</head>
+<body>
+
+<h1 style="padding:20px;">Fullscreen Test Page</h1>
+
+<div style="max-width:800px; margin: 0 auto;">
+    <div class="video-container"
+         x-data="{ isFullscreen: false, isPlaying: false }"
+         :class="{ 'is-fullscreen': isFullscreen, 'aspect-video': !isFullscreen }"
+         style="aspect-ratio: 16/9;">
+
+        <video
+            x-ref="video"
+            style="width:100%; height:100%; object-fit: contain;"
+            poster="https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?q=80&w=1000&auto=format&fit=crop"
+        >
+            <source src="https://vjs.zencdn.net/v/oceans.mp4" type="video/mp4" />
+        </video>
+
+        <!-- Controls overlay -->
+        <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; padding:20px; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); z-index:20;">
+            
+            <div style="text-align:right;">
+                <span style="background:rgba(255,255,255,0.2); padding:4px 8px; border-radius:4px; font-size:12px;" x-text="isFullscreen ? 'FULLSCREEN ON' : 'FULLSCREEN OFF'"></span>
+            </div>
+
+            <!-- Center play -->
+            <div style="display:flex; justify-content:center; align-items:center;">
+                <button @click="$refs.video.paused ? $refs.video.play() : $refs.video.pause(); isPlaying = !isPlaying"
+                        style="width:60px; height:60px; border-radius:50%; background:rgba(229,9,20,0.9); border:2px solid #e50914; color:white; font-size:24px; cursor:pointer;">
+                    ▶
+                </button>
+            </div>
+
+            <!-- Bottom bar -->
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span>0:00 / 1:02</span>
+                
+                <button @click="isFullscreen = !isFullscreen; document.body.style.overflow = isFullscreen ? 'hidden' : ''"
+                        style="padding:8px 16px; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.3); color:white; border-radius:8px; cursor:pointer; font-size:14px;">
+                    <span x-text="isFullscreen ? '✕ Exit Fullscreen' : '⛶ Fullscreen'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<p style="padding:20px; color:#666;">Content below player - should not be visible when fullscreen</p>
+
+</body>
+</html>
