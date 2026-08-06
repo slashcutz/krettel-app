@@ -504,7 +504,7 @@
                         if (this.isPlaying) {
                             this.controlsTimeout = setTimeout(() => {
                                 this.showControls = false;
-                            }, 3000);
+                            }, 2000);
                         }
                     },
 
