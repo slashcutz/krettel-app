@@ -108,7 +108,8 @@ class TeraBoxClient
 
         // When using a stored NDUS cookie, verify it is still valid (this is
         // what also detects expiry and surfaces the admin notification).
-        if (config('terabox.ndus')) {
+        $ndus = \App\Models\Setting::get('terabox_ndus') ?: config('terabox.ndus');
+        if ($ndus) {
             $this->verifySession();
         }
     }
@@ -128,7 +129,7 @@ class TeraBoxClient
             return;
         }
 
-        $ndus = config('terabox.ndus');
+        $ndus = \App\Models\Setting::get('terabox_ndus') ?: config('terabox.ndus');
         if ($ndus) {
             $this->setSessionCookie('ndus', $ndus);
             return;
