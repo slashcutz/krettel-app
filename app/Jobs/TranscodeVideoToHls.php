@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Models\Video;
+use App\Models\VideoAudioTrack;
+use App\Support\LanguageCodes;
 use App\Support\MediaProbe;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -26,9 +28,12 @@ class TranscodeVideoToHls implements ShouldQueue
     {
         $absolutePath = Storage::disk('local')->path($this->stagingPath);
 
-        Log::info('[HLS-TRANSCODE] Starting job for video ' . $this->video->id, [
-            'staging_path' => $this->stagingPath,
-        ]);
+        $log = fn (string $msg, array $ctx = []) => Log::channel('krettel')->info(
+            '[HLS-TRANSCODE] ' . $msg,
+            array_merge(['video_id' => $this->video->id], $ctx)
+        );
+
+        $log('Starting job.', ['staging_path' => $this->stagingPath]);
 
         if (! file_exists($absolutePath)) {
             $this->fail('Staging file not found: ' . $absolutePath);
@@ -38,15 +43,39 @@ class TranscodeVideoToHls implements ShouldQueue
         $audioStreams = MediaProbe::audioStreams($absolutePath);
         $videoCodec = MediaProbe::videoCodec($absolutePath);
 
-        Log::info('[HLS-TRANSCODE] Probing done.', [
+        // Separately uploaded audio files (VideoAudioTrack rows) become extra
+        // audio renditions, so a single-audio MKV + 1 extra file = 2 tracks.
+        $extraFiles = [];
+        $separateTracks = VideoAudioTrack::where('video_id', $this->video->id)->get();
+        foreach ($separateTracks as $track) {
+            $audioPath = Storage::disk('public')->path($track->file_path);
+            if (! is_file($audioPath)) {
+                $log('Separate audio file missing, skipping.', ['file' => $track->file_path]);
+                continue;
+            }
+            $label = $track->label ?: ($track->language->name ?? null);
+            $extraFiles[] = [
+                'path' => $audioPath,
+                'language' => $label ? LanguageCodes::code($label) : null,
+                'default' => (bool) $track->is_default,
+            ];
+        }
+
+        $totalAudio = count($audioStreams) + count($extraFiles);
+
+        $log('Probe done.', [
             'video_codec' => $videoCodec,
-            'audio_tracks' => array_map(fn ($a) => $a['language'] ?? 'und', $audioStreams),
+            'muxed_audio' => count($audioStreams),
+            'separate_audio' => count($extraFiles),
+            'total_audio' => $totalAudio,
         ]);
 
-        // Not a multi-audio source — fall back to the normal TeraBox path.
-        if (count($audioStreams) < 2) {
-            Log::info('[HLS-TRANSCODE] Source has fewer than 2 audio tracks, deferring to TeraBox.', [
-                'video_id' => $this->video->id,
+        // Not enough audio sources for a multi-audio package — fall back to
+        // the normal TeraBox path (single audio).
+        if ($totalAudio < 2) {
+            $log('Fewer than 2 audio sources — deferring to TeraBox.', [
+                'muxed_audio' => count($audioStreams),
+                'separate_audio' => count($extraFiles),
             ]);
             $this->video->update(['hls_status' => null, 'hls_folder' => null]);
             UploadVideoToTeraBox::dispatch($this->video, $this->stagingPath);
@@ -61,8 +90,9 @@ class TranscodeVideoToHls implements ShouldQueue
                 mkdir($outDir, 0775, true);
             }
 
-            $names = $this->audioNames($audioStreams);
-            $process = $this->buildProcess($absolutePath, $outDir, $videoCodec, $audioStreams, $names);
+            $tracks = $this->audioTracks($audioStreams, $extraFiles);
+            $names = $this->audioNames($tracks);
+            $process = $this->buildProcess($absolutePath, $outDir, $videoCodec, $tracks, $names, $extraFiles);
             $process->setTimeout($this->timeout);
             $process->run();
 
@@ -76,7 +106,7 @@ class TranscodeVideoToHls implements ShouldQueue
                 throw new \RuntimeException('Master playlist not produced.');
             }
 
-            $this->finalizeMasterPlaylist($outDir, $audioStreams, $names);
+            $this->finalizeMasterPlaylist($outDir, $tracks, $names);
 
             $this->video->update([
                 'hls_status' => 'ready',
@@ -86,11 +116,12 @@ class TranscodeVideoToHls implements ShouldQueue
 
             Storage::disk('local')->delete($this->stagingPath);
 
-            Log::info('[HLS-TRANSCODE] Transcode complete for video ' . $this->video->id, [
+            $log('Transcode complete.', [
                 'folder' => 'hls/' . $this->video->id,
+                'audio_tracks' => $names,
             ]);
         } catch (\Throwable $e) {
-            Log::error('[HLS-TRANSCODE] Failed for video ' . $this->video->id, [
+            Log::channel('krettel')->error('[HLS-TRANSCODE] Failed for video ' . $this->video->id, [
                 'error' => $e->getMessage(),
             ]);
 
@@ -101,13 +132,44 @@ class TranscodeVideoToHls implements ShouldQueue
         }
     }
 
-    protected function audioNames(array $audioStreams): array
+    /**
+     * Unify muxed + separately uploaded audio sources into one list.
+     *
+     * Each entry: ['input' => ffmpeg input index, 'stream' => audio stream
+     * index within that input, 'language' => 3-letter code, 'default' => bool]
+     */
+    protected function audioTracks(array $audioStreams, array $extraFiles): array
+    {
+        $tracks = [];
+
+        foreach ($audioStreams as $i => $audio) {
+            $tracks[] = [
+                'input' => 0,
+                'stream' => $i,
+                'language' => $audio['language'],
+                'default' => (bool) $audio['default'],
+            ];
+        }
+
+        foreach ($extraFiles as $k => $file) {
+            $tracks[] = [
+                'input' => $k + 1,
+                'stream' => 0,
+                'language' => $file['language'],
+                'default' => $file['default'],
+            ];
+        }
+
+        return $tracks;
+    }
+
+    protected function audioNames(array $tracks): array
     {
         $names = [];
         $seen = [];
 
-        foreach ($audioStreams as $i => $audio) {
-            $language = $audio['language'] ? preg_replace('/[^a-z0-9_]/i', '', $audio['language']) : null;
+        foreach ($tracks as $i => $track) {
+            $language = $track['language'] ? preg_replace('/[^a-z0-9_]/i', '', $track['language']) : null;
             $base = $language ?: ('audio' . $i);
             $name = $base;
             $k = 2;
@@ -121,13 +183,17 @@ class TranscodeVideoToHls implements ShouldQueue
         return $names;
     }
 
-    protected function buildProcess(string $input, string $outDir, ?string $videoCodec, array $audioStreams, array $names): Process
+    protected function buildProcess(string $input, string $outDir, ?string $videoCodec, array $tracks, array $names, array $extraFiles): Process
     {
         $args = [config('ffmpeg.ffmpeg'), '-y', '-i', $input];
 
+        foreach ($extraFiles as $file) {
+            $args[] = '-i'; $args[] = $file['path'];
+        }
+
         $args[] = '-map'; $args[] = '0:v:0';
-        foreach ($audioStreams as $i => $audio) {
-            $args[] = '-map'; $args[] = '0:a:' . $i;
+        foreach ($tracks as $track) {
+            $args[] = '-map'; $args[] = $track['input'] . ':a:' . $track['stream'];
         }
 
         // Copy the video when it's already H.264 (fast); re-encode otherwise
@@ -145,14 +211,13 @@ class TranscodeVideoToHls implements ShouldQueue
         $args[] = '-b:a'; $args[] = '160k';
         $args[] = '-ac'; $args[] = '2';
 
-        foreach ($audioStreams as $i => $audio) {
-            $language = $audio['language'] ? preg_replace('/[^a-z0-9_]/i', '', $audio['language']) : null;
-            $args[] = '-metadata'; $args[] = 's:a:' . $i . '=language=' . ($language ?: 'und');
+        foreach ($tracks as $k => $track) {
+            $args[] = '-metadata'; $args[] = 's:a:' . $k . '=language=' . ($track['language'] ?: 'und');
         }
 
         $map = 'v:0,agroup:aud,name:video';
-        foreach ($names as $i => $name) {
-            $map .= ' a:' . $i . ',agroup:aud,name:' . $name;
+        foreach ($names as $k => $name) {
+            $map .= ' a:' . $k . ',agroup:aud,name:' . $name;
         }
 
         $args[] = '-var_stream_map'; $args[] = $map;
@@ -172,7 +237,7 @@ class TranscodeVideoToHls implements ShouldQueue
      * Turn ffmpeg's raw master playlist into the clean multi-audio form:
      * friendly #EXT-X-MEDIA names and a single video #EXT-X-STREAM-INF.
      */
-    protected function finalizeMasterPlaylist(string $outDir, array $audioStreams, array $names): void
+    protected function finalizeMasterPlaylist(string $outDir, array $tracks, array $names): void
     {
         $path = $outDir . '/index.m3u8';
         $content = (string) file_get_contents($path);
@@ -188,12 +253,22 @@ class TranscodeVideoToHls implements ShouldQueue
             );
         }
 
+        // Exactly one audio track is the DEFAULT (first, or an explicitly
+        // flagged one) — matches what browsers pick without user interaction.
+        $defaultIndex = 0;
+        foreach ($tracks as $i => $track) {
+            if ($track['default']) {
+                $defaultIndex = $i;
+                break;
+            }
+        }
+
         // Rewrite each audio #EXT-X-MEDIA entry with a friendly display name.
-        foreach ($audioStreams as $i => $audio) {
+        foreach ($tracks as $i => $track) {
             $name = $names[$i];
             $uri = 'out' . $name . '.m3u8';
-            $label = $this->languageLabel($audio['language'], $i);
-            $isDefault = $audio['default'] || $i === 0;
+            $label = $this->languageLabel($track['language'], $i);
+            $isDefault = ($i === $defaultIndex);
 
             $content = preg_replace_callback(
                 '/#EXT-X-MEDIA:TYPE=AUDIO,[^\r\n]*URI="' . preg_quote($uri, '/') . '"/',
@@ -232,6 +307,6 @@ class TranscodeVideoToHls implements ShouldQueue
     protected function fail(string $reason): void
     {
         $this->video->update(['hls_status' => 'failed', 'hls_folder' => null, 'video_url' => 'failed']);
-        Log::error('[HLS-TRANSCODE] ' . $reason, ['video_id' => $this->video->id]);
+        Log::channel('krettel')->error('[HLS-TRANSCODE] ' . $reason, ['video_id' => $this->video->id]);
     }
 }

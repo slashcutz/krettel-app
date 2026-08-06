@@ -146,29 +146,35 @@
                             <!-- Step 4: Multiple Audio -->
                             <div x-show="step === 4" x-transition.opacity.duration.300ms style="display: none;">
                                 <h3 class="text-xl font-bold text-white mb-6">Audio Tracks</h3>
-                                <div class="space-y-4">
-                                    <div class="border border-border p-4 rounded-lg bg-secondary/30">
+                                <p class="text-xs text-muted mb-4">Optional. Add extra audio files to mux into the video — the player will show an audio switcher. The first track (or the one marked default) plays by default.</p>
+                                <div id="audio-tracks-container" class="space-y-4"></div>
+                                <button type="button" onclick="addAudioTrack()" class="text-primary text-sm font-medium hover:underline">+ Add another audio track</button>
+
+                                <template id="audio-track-template">
+                                    <div class="audio-track-row border border-border p-4 rounded-lg bg-secondary/30">
                                         <div class="grid grid-cols-2 gap-4">
                                             <div>
                                                 <x-input-label value="Audio Language" />
-                                                <select name="audio_language[]" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
-                                                    <option>English</option>
-                                                    <option>Spanish</option>
-                                                    <option>French</option>
+                                                <select name="audio_language[0]" class="audio-language mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
+                                                    @foreach(\App\Support\LanguageCodes::names() as $lang)
+                                                        <option value="{{ $lang }}" @if($loop->first) selected @endif>{{ $lang }}</option>
+                                                    @endforeach
                                                 </select>
                                             </div>
                                             <div>
                                                 <x-input-label value="Upload Audio File" />
-                                                <input type="file" name="audio_files[]" class="mt-1 block w-full text-white">
+                                                <input type="file" name="audio_files[0]" class="audio-file mt-1 block w-full text-white" accept="audio/*">
                                             </div>
                                         </div>
-                                        <div class="mt-4 flex items-center space-x-2">
-                                            <input type="checkbox" name="default_audio[]" class="rounded border-border text-primary focus:ring-primary bg-secondary">
-                                            <span class="text-white text-sm">Set as Default Audio</span>
+                                        <div class="mt-4 flex items-center justify-between">
+                                            <div class="flex items-center space-x-2">
+                                                <input type="checkbox" name="default_audio[0]" class="audio-default rounded border-border text-primary focus:ring-primary bg-secondary">
+                                                <span class="text-white text-sm">Set as Default Audio</span>
+                                            </div>
+                                            <button type="button" onclick="removeAudioTrack(this)" class="text-red-400 text-sm hover:text-red-300">Remove</button>
                                         </div>
                                     </div>
-                                    <button type="button" class="text-primary text-sm font-medium hover:underline">+ Add another audio track</button>
-                                </div>
+                                </template>
                             </div>
 
                             <!-- Step 5: Subtitles -->
@@ -337,165 +343,94 @@
                     const storageChoice = (document.querySelector('[name="storage_provider"]')?.value === 'terabox')
                         ? 'terabox' : 'local';
                     const videoFileName = this.videoFile ? this.videoFile.name : 'Video';
-                    const totalFileSize = this.videoFile ? this.videoFile.size : 0;
+                    
+                    // Convert FormData to an array of entries so it can be cloned via postMessage
+                    const entries = [];
+                    for (let [key, value] of formData.entries()) {
+                        entries.push([key, value]);
+                    }
 
-                    // Track upload start time and speed
-                    let uploadStartTime = Date.now();
-                    let lastLoaded = 0;
-                    let lastTime = uploadStartTime;
-                    let currentSpeed = 0; // bytes per second
+                    // Open popup
+                    const popupUrl = '{{ route("upload.popup") }}';
+                    const popup = window.open(popupUrl, 'UploadManager', 'width=450,height=300,toolbar=0,menubar=0,location=0,status=0,scrollbars=0,resizable=0');
+                    
+                    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Popup Blocked',
+                            text: 'Please allow popups for this site to use the background upload manager.',
+                            background: '#1a1a1a', color: '#fff', confirmButtonColor: '#e50914'
+                        });
+                        return;
+                    }
 
-                    // Non-blocking persistent toast
+                    // Wait for popup to signal it's ready, then send data
+                    const messageHandler = (event) => {
+                        if (event.data && event.data.type === 'POPUP_READY') {
+                            popup.postMessage({
+                                type: 'START_UPLOAD',
+                                action: form.action,
+                                formData: entries,
+                                fileName: videoFileName,
+                                storageChoice: storageChoice
+                            }, '*');
+                            window.removeEventListener('message', messageHandler);
+                            
+                            // Only redirect AFTER data has safely reached the popup!
+                            setTimeout(() => {
+                                window.location.href = '{{ route("admin.videos.index") }}';
+                            }, 500);
+                        }
+                    };
+                    window.addEventListener('message', messageHandler);
+
+                    // Show success on main window
                     const Toast = Swal.mixin({
                         toast: true,
-                        position: 'bottom-end',
+                        position: 'top-end',
                         showConfirmButton: false,
+                        timer: 3000,
+                        timerProgressBar: true,
                         background: '#1a1a1a',
                         color: '#fff',
-                        showCloseButton: true,
-                        didOpen: (toast) => {
-                            toast.style.minWidth = '320px';
-                        }
                     });
-
-                    const formatSize = (bytes) => {
-                        if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
-                        if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
-                        if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB';
-                        return bytes + ' B';
-                    };
-
-                    const formatETA = (seconds) => {
-                        if (!isFinite(seconds) || seconds <= 0) return 'calculating...';
-                        if (seconds < 60) return Math.ceil(seconds) + 's remaining';
-                        if (seconds < 3600) return Math.ceil(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's remaining';
-                        return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm remaining';
-                    };
-
-                    const formatSpeed = (bytesPerSec) => {
-                        if (bytesPerSec >= 1048576) return (bytesPerSec / 1048576).toFixed(1) + ' MB/s';
-                        if (bytesPerSec >= 1024) return (bytesPerSec / 1024).toFixed(0) + ' KB/s';
-                        return bytesPerSec.toFixed(0) + ' B/s';
-                    };
-
                     Toast.fire({
-                        icon: 'info',
-                        title: 'Uploading: ' + videoFileName,
-                        html: `
-                            <div class="w-full bg-gray-700 rounded-full h-2 my-2">
-                                <div id="swal-progress-bar" class="bg-primary h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                            </div>
-                            <div class="flex justify-between text-xs text-gray-400">
-                                <span id="swal-progress-text">0%</span>
-                                <span id="swal-size-text">0 / ${formatSize(totalFileSize)}</span>
-                            </div>
-                            <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                <span id="swal-speed-text">Speed: --</span>
-                                <span id="swal-eta-text">ETA: calculating...</span>
-                            </div>
-                        `,
+                        icon: 'success',
+                        title: 'Upload started!',
+                        text: 'Your upload is starting in the background window.'
                     });
 
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', form.action, true);
-                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-                    
-                    xhr.upload.onprogress = function(e) {
-                        if (e.lengthComputable) {
-                            const now = Date.now();
-                            const percentComplete = Math.round((e.loaded / e.total) * 100);
-                            
-                            // Calculate speed (smoothed)
-                            const timeDiff = (now - lastTime) / 1000; // seconds
-                            if (timeDiff > 0.5) {
-                                const bytesDiff = e.loaded - lastLoaded;
-                                currentSpeed = bytesDiff / timeDiff;
-                                lastLoaded = e.loaded;
-                                lastTime = now;
-                            }
-
-                            // Calculate ETA
-                            const remaining = e.total - e.loaded;
-                            const eta = currentSpeed > 0 ? remaining / currentSpeed : 0;
-
-                            const progressBar = document.getElementById('swal-progress-bar');
-                            const progressText = document.getElementById('swal-progress-text');
-                            const sizeText = document.getElementById('swal-size-text');
-                            const speedText = document.getElementById('swal-speed-text');
-                            const etaText = document.getElementById('swal-eta-text');
-
-                            if (progressBar) progressBar.style.width = percentComplete + '%';
-                            if (progressText) progressText.innerText = percentComplete + '%';
-                            if (sizeText) sizeText.innerText = formatSize(e.loaded) + ' / ' + formatSize(e.total);
-                            if (speedText) speedText.innerText = 'Speed: ' + (currentSpeed > 0 ? formatSpeed(currentSpeed) : '--');
-                            if (etaText) etaText.innerText = 'ETA: ' + formatETA(eta);
-                        }
-                    };
-
-                    xhr.onload = function() {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            Swal.close();
-                            const SuccessToast = Swal.mixin({
-                                toast: true,
-                                position: 'bottom-end',
-                                showConfirmButton: false,
-                                timer: 5000,
-                                timerProgressBar: true,
-                                background: '#1a1a1a',
-                                color: '#fff',
-                            });
-                            SuccessToast.fire({
-                                icon: 'success',
-                                title: 'Upload complete!',
-                                text: storageChoice === 'terabox'
-                                    ? 'TeraBox sync has been queued. Check notifications for progress.'
-                                    : 'Video uploaded successfully.',
-                            });
-                            // Reset form
-                            form.reset();
-                            // Redirect after a short delay so user sees the success message
-                            const response = JSON.parse(xhr.responseText);
-                            setTimeout(() => {
-                                if (response.redirect) window.location.href = response.redirect;
-                            }, 2000);
-                        } else {
-                            Swal.close();
-                            const ErrorToast = Swal.mixin({
-                                toast: true,
-                                position: 'bottom-end',
-                                showConfirmButton: true,
-                                confirmButtonColor: '#e50914',
-                                background: '#1a1a1a',
-                                color: '#fff',
-                            });
-                            ErrorToast.fire({
-                                icon: 'error',
-                                title: 'Upload Failed',
-                                text: 'There was an error processing your upload.',
-                            });
-                        }
-                    };
-
-                    xhr.onerror = function() {
-                        Swal.close();
-                        const ErrorToast = Swal.mixin({
-                            toast: true,
-                            position: 'bottom-end',
-                            showConfirmButton: true,
-                            confirmButtonColor: '#e50914',
-                            background: '#1a1a1a',
-                            color: '#fff',
-                        });
-                        ErrorToast.fire({
-                            icon: 'error',
-                            title: 'Network Error',
-                            text: 'A network error occurred during upload.',
-                        });
-                    };
-
-                    xhr.send(formData);
+                    form.reset();
+                    this.step = 1;
                 }
             }
         }
+
+        // ---- Dynamic audio-track rows (step 4) ----
+        function reindexAudioRows() {
+            const rows = document.querySelectorAll('#audio-tracks-container .audio-track-row');
+            rows.forEach((row, i) => {
+                row.querySelector('.audio-language').name = 'audio_language[' + i + ']';
+                row.querySelector('.audio-file').name = 'audio_files[' + i + ']';
+                row.querySelector('.audio-default').name = 'default_audio[' + i + ']';
+            });
+        }
+
+        function addAudioTrack() {
+            const container = document.getElementById('audio-tracks-container');
+            const template = document.getElementById('audio-track-template');
+            if (!container || !template) return;
+            const row = template.content.firstElementChild.cloneNode(true);
+            container.appendChild(row);
+            reindexAudioRows();
+        }
+
+        function removeAudioTrack(btn) {
+            const row = btn.closest('.audio-track-row');
+            if (row) row.remove();
+            reindexAudioRows();
+        }
+
+        document.addEventListener('DOMContentLoaded', addAudioTrack);
     </script>
 </x-admin-layout>

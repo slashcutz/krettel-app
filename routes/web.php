@@ -31,6 +31,9 @@ Route::get('/dashboard', [\App\Http\Controllers\UserDashboardController::class, 
 
 Route::middleware(['auth', 'role:Super Admin|Admin'])->group(function () {
     Route::get('/upload', [VideoUploadController::class, 'index'])->name('upload.index');
+    Route::get('/upload/popup', function () {
+        return view('frontend.upload.popup');
+    })->name('upload.popup');
     Route::post('/upload', [VideoUploadController::class, 'store'])->name('upload.store');
 });
 

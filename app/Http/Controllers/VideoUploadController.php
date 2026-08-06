@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Video;
+use App\Jobs\TranscodeVideoToHls;
 use App\Jobs\UploadVideoToTeraBox;
+use App\Support\LanguageCodes;
+use App\Support\MediaProbe;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class VideoUploadController extends Controller
 {
@@ -114,23 +118,66 @@ class VideoUploadController extends Controller
             'category_id' => $video->category_id,
         ]);
 
+        // Save separately uploaded audio tracks FIRST so the processing job can
+        // mux them into the HLS output as extra audio renditions.
+        $savedAudioCount = 0;
+        if ($request->hasFile('audio_files')) {
+            $languages = $request->input('audio_language', []);
+            $defaults = $request->input('default_audio', []);
+            foreach ($request->file('audio_files') as $index => $audioFile) {
+                if (! $audioFile) {
+                    continue;
+                }
+                $languageName = $languages[$index] ?? 'English';
+                $language = \App\Models\Language::firstOrCreate(
+                    ['code' => LanguageCodes::code($languageName)],
+                    ['name' => $languageName]
+                );
+                $audioPath = $audioFile->store('audios', 'public');
+                \App\Models\VideoAudioTrack::create([
+                    'video_id' => $video->id,
+                    'language_id' => $language->id,
+                    'label' => $languageName,
+                    'file_path' => $audioPath,
+                    'is_default' => isset($defaults[$index]) ? true : false,
+                ]);
+                $savedAudioCount++;
+                Log::channel('krettel')->info('[UPLOAD] Separate audio track saved for video ' . $video->id, [
+                    'file_path' => $audioPath,
+                    'language' => $languageName,
+                    'is_default' => isset($defaults[$index]) ? true : false,
+                ]);
+            }
+        }
+
         if ($stagingPath) {
             Log::info('[UPLOAD] Dispatching processing job.', [
                 'video_id' => $video->id,
                 'staging_path' => $stagingPath,
             ]);
 
-            $multiAudio = \App\Support\MediaProbe::audioStreamCount(
-                \Illuminate\Support\Facades\Storage::disk('local')->path($stagingPath)
-            ) >= 2;
+            $muxedAudio = MediaProbe::audioStreamCount(
+                Storage::disk('local')->path($stagingPath)
+            );
+            $totalAudio = $muxedAudio + $savedAudioCount;
 
-            if ($multiAudio) {
-                Log::info('[UPLOAD] Multi-audio source detected — transcoding to HLS.', [
+            Log::channel('krettel')->info('[UPLOAD] Processing decision for video ' . $video->id, [
+                'muxed_audio' => $muxedAudio,
+                'separate_audio' => $savedAudioCount,
+                'total_audio' => $totalAudio,
+            ]);
+
+            if ($totalAudio >= 2) {
+                Log::channel('krettel')->info('[UPLOAD] Multi-audio source detected — transcoding to HLS.', [
                     'video_id' => $video->id,
                 ]);
                 $video->update(['hls_status' => 'processing']);
-                \App\Jobs\TranscodeVideoToHls::dispatch($video, $stagingPath);
+                TranscodeVideoToHls::dispatch($video, $stagingPath);
             } else {
+                Log::channel('krettel')->warning(
+                    '[UPLOAD] Fewer than 2 audio sources — deferring to TeraBox (no audio switcher).',
+                    ['video_id' => $video->id, 'total_audio' => $totalAudio]
+                );
                 UploadVideoToTeraBox::dispatch($video, $stagingPath);
             }
         } else {
@@ -148,23 +195,6 @@ class VideoUploadController extends Controller
             'type' => 'upload',
             'link' => route('video.show', $video->slug),
         ]);
-
-        // Process Audio Tracks
-        if ($request->hasFile('audio_files')) {
-            $languages = $request->input('audio_language', []);
-            foreach ($request->file('audio_files') as $index => $audioFile) {
-                if ($audioFile) {
-                    $audioPath = $audioFile->store('audios', 'public');
-                    \App\Models\VideoAudioTrack::create([
-                        'video_id' => $video->id,
-                        'language' => $languages[$index] ?? 'Unknown',
-                        'file_path' => $audioPath,
-                        'is_default' => isset($request->input('default_audio')[$index]) ? true : false,
-                    ]);
-                    Log::info('[UPLOAD] Audio track saved for video ' . $video->id . '.', ['file_path' => $audioPath]);
-                }
-            }
-        }
 
         // Process Subtitles
         if ($request->hasFile('subtitle_files')) {
