@@ -20,51 +20,57 @@
     }
 @endphp
 
-<div class="relative w-full h-[80vh] md:h-[90vh] flex items-center justify-start overflow-hidden">
-    <!-- Background Video/Image -->
-    <div class="absolute inset-0 w-full h-full">
-        <img src="{{ $image }}" alt="Hero Background" loading="eager" fetchpriority="high" decoding="sync" class="w-full h-full object-cover">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 md:pt-32">
+    <section class="relative w-full rounded-3xl overflow-hidden bg-zinc-900 aspect-[16/9] md:aspect-[21/9] flex flex-col justify-end p-6 md:p-10 border border-zinc-800/60 shadow-2xl group">
+        <!-- Hero Background Image -->
+        <img src="{{ $image }}" alt="Hero Background" loading="eager" fetchpriority="high" decoding="sync" class="absolute inset-0 w-full h-full object-cover z-0">
         
-        <!-- Gradient Overlays for smooth transition to background -->
-        <div class="absolute inset-0 bg-gradient-to-r from-background via-background/60 to-transparent"></div>
-        <div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
-    </div>
+        <!-- Gradient Overlays for High Contrast Readability -->
+        <div class="absolute inset-0 bg-gradient-to-t from-[#08080A] via-[#08080A]/50 to-transparent z-10"></div>
+        <div class="absolute inset-0 bg-gradient-to-r from-[#08080A]/80 via-transparent to-transparent z-10"></div>
 
-    <!-- Content -->
-    <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div class="max-w-2xl">
-            <h1 class="text-3xl sm:text-4xl lg:text-6xl font-bold text-white mb-4 tracking-tight drop-shadow-lg">
+        <!-- Content -->
+        <div class="relative z-20 space-y-3 max-w-xl text-left">
+            @if($isBanner)
+            <span class="text-xs font-extrabold uppercase tracking-widest text-red-600">Featured</span>
+            @else
+            <span class="text-xs font-extrabold uppercase tracking-widest text-red-600">Now Streaming</span>
+            @endif
+            
+            <h1 class="text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white drop-shadow-md">
                 {{ $title }}
             </h1>
             
-            <div class="flex items-center space-x-4 mb-6 text-sm md:text-base font-medium">
-                @if($match)<span class="text-success">{{ $match }}</span>@endif
-                @if($rating)<span class="text-white border border-white/40 px-2 py-0.5 rounded">{{ $rating }}</span>@endif
-                @if($year)<span class="text-white">{{ $year }}</span>@endif
+            <!-- Metadata Row -->
+            <div class="flex items-center space-x-2.5 text-xs font-semibold text-zinc-300 flex-wrap gap-y-1">
+                @if($match)<span class="text-emerald-400 font-bold">{{ $match }}</span>@endif
+                @if($rating)<span class="bg-zinc-800/80 border border-zinc-700 px-2 py-0.5 rounded text-[11px] text-zinc-200">{{ $rating }}</span>@endif
+                @if($year)<span>{{ $year }}</span>@endif
                 @if($duration)
-                    <span class="text-white">{{ gmdate('H:i', $duration) }}</span>
+                    <span>{{ gmdate('H:i', $duration) }}</span>
                 @endif
-                @if($quality)<span class="text-white bg-white/20 px-2 py-0.5 rounded">{{ $quality }}</span>@endif
+                @if($quality)<span class="bg-zinc-800/80 border border-zinc-700 px-1.5 py-0.5 rounded text-[10px] text-zinc-200 font-bold">{{ $quality }}</span>@endif
             </div>
 
             @if($description)
-            <p class="text-lg text-white/90 mb-8 line-clamp-3 drop-shadow-md leading-relaxed">
+            <p class="text-sm md:text-base text-zinc-300 line-clamp-2 leading-relaxed max-w-lg drop-shadow-sm">
                 {{ $description }}
             </p>
             @endif
 
+            <!-- Action Buttons -->
             @if($slug)
-            <div class="flex items-center space-x-4">
-                <a href="{{ route('video.show', $slug) }}" class="flex items-center justify-center px-8 py-3 bg-white text-black rounded-lg font-bold hover:bg-white/80 transition-colors">
-                    <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                    Play
+            <div class="flex items-center space-x-3 pt-2">
+                <a href="{{ route('video.show', $slug) }}" class="bg-netflix-red hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl flex items-center space-x-2 shadow-lg active:scale-95 transition text-xs sm:text-sm">
+                    <svg class="w-4 h-4 fill-white text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <span>Play</span>
                 </a>
-                <a href="{{ route('video.show', $slug) }}" class="flex items-center justify-center px-8 py-3 bg-gray-500/50 text-white rounded-lg font-bold hover:bg-gray-500/70 transition-colors backdrop-blur-sm">
-                    <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    More Info
+                <a href="{{ route('video.show', $slug) }}" class="bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-700/80 text-white font-semibold px-5 py-3 rounded-xl flex items-center space-x-2 backdrop-blur-md active:scale-95 transition text-xs sm:text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span>More Info</span>
                 </a>
             </div>
             @endif
         </div>
-    </div>
+    </section>
 </div>

@@ -31,7 +31,7 @@
             <x-hero-banner :video="$featured" />
 
             <!-- Video Sections -->
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 -mt-20 md:-mt-32 relative z-20 space-y-10">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-20 space-y-10">
                 
                 <!-- Continue Watching -->
                 @if(isset($watchHistory) && $watchHistory->isNotEmpty())
@@ -43,7 +43,7 @@
                     <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @foreach($watchHistory as $history)
                             @if($history->video)
-                                <div class="min-w-[200px] sm:min-w-[240px] flex-shrink-0">
+                                <div class="min-w-[200px] sm:min-w-[240px] aspect-video flex-shrink-0">
                                     <x-video-card :video="$history->video" />
                                 </div>
                             @endif
@@ -62,7 +62,7 @@
                     <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @foreach($favorites as $favorite)
                             @if($favorite->video)
-                                <div class="min-w-[170px] sm:min-w-[200px] flex-shrink-0">
+                                <div class="min-w-[170px] sm:min-w-[200px] aspect-video flex-shrink-0">
                                     <x-video-card :video="$favorite->video" />
                                 </div>
                             @endif
@@ -107,7 +107,7 @@
                     </div>
                     <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @forelse($trending as $video)
-                            <div class="min-w-[200px] sm:min-w-[240px] flex-shrink-0">
+                            <div class="min-w-[200px] sm:min-w-[240px] aspect-video flex-shrink-0">
                                 <x-video-card :video="$video" />
                             </div>
                         @empty
@@ -123,7 +123,7 @@
                     </div>
                     <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @forelse($newReleases as $video)
-                            <div class="min-w-[200px] sm:min-w-[240px] flex-shrink-0">
+                            <div class="min-w-[200px] sm:min-w-[240px] aspect-video flex-shrink-0">
                                 <x-video-card :video="$video" />
                             </div>
                         @empty
@@ -139,7 +139,7 @@
                     </div>
                     <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @forelse($recommended as $video)
-                            <div class="min-w-[200px] sm:min-w-[240px] flex-shrink-0">
+                            <div class="min-w-[200px] sm:min-w-[240px] aspect-video flex-shrink-0">
                                 <x-video-card :video="$video" />
                             </div>
                         @empty

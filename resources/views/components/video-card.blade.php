@@ -32,7 +32,7 @@
     }
 @endphp
 
-<a href="{{ route('video.show', data_get($video, 'slug', data_get($video, 'id', 'sample-video'))) }}" class="block group relative overflow-hidden rounded-md cursor-pointer transition-all duration-300 transform hover:scale-105 hover:z-50 hover:shadow-2xl bg-card border border-border/50 aspect-video">
+<a href="{{ route('video.show', data_get($video, 'slug', data_get($video, 'id', 'sample-video'))) }}" class="block w-full h-full group relative overflow-hidden rounded-md cursor-pointer transition-all duration-300 transform hover:scale-105 hover:z-50 hover:shadow-2xl bg-card border border-border/50 aspect-video">
     
     <!-- Thumbnail -->
     <img src="{{ $image }}" alt="Video Thumbnail" loading="eager" fetchpriority="high" decoding="async" class="w-full h-full object-cover">
