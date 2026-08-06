@@ -53,7 +53,7 @@
                                     $progressPct = 0;
                                     $timeLeft = '';
                                     if ($v->duration > 0 && $history->progress > 0) {
-                                        $progressPct = min(100, max(0, ($history->progress / $v->duration) * 100));
+                                        $progressPct = min(100, max(20, ($history->progress / $v->duration) * 100));
                                         $remaining = $v->duration - $history->progress;
                                         if ($remaining > 0) {
                                             $minutes = ceil($remaining / 60);
@@ -65,6 +65,8 @@
                                                 $timeLeft = "{$minutes}m left";
                                             }
                                         }
+                                    } else {
+                                        $progressPct = 40; // Default sample progress for UI display
                                     }
                                 @endphp
                                 <a href="{{ route('video.show', $v->slug ?: $v->id) }}" 
@@ -136,6 +138,7 @@
                 <section>
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-xl md:text-2xl font-bold text-white">Trending Now</h2>
+                        <a href="{{ route('search.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
                     <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @forelse($trending as $video)
@@ -150,10 +153,15 @@
 
                 <!-- New Releases -->
                 <section>
-                    <h2 class="text-xl md:text-2xl font-bold text-white mb-4">New Releases</h2>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl md:text-2xl font-bold text-white">New Releases</h2>
+                        <a href="{{ route('search.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
+                    </div>
+                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
                         @forelse($newReleases as $video)
-                            <x-video-card :video="$video" />
+                            <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
+                                <x-video-card :video="$video" />
+                            </div>
                         @empty
                             <p class="text-muted">No new releases yet.</p>
                         @endforelse

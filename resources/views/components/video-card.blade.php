@@ -37,10 +37,16 @@
     <!-- Thumbnail -->
     <img src="{{ $image }}" alt="Video Thumbnail" loading="eager" fetchpriority="high" decoding="async" class="w-full h-full object-cover">
     
-    <!-- Progress Bar (Continue Watching) -->
-    @if(data_get($video, 'progress'))
-    <div class="absolute bottom-0 left-0 w-full h-1 bg-gray-700">
-        <div class="h-full bg-primary" style="width: {{ data_get($video, 'progress') }}%"></div>
+    <!-- Progress Bar (Primary Red) -->
+    @php
+        $cardProgress = data_get($video, 'progress');
+        if (!$cardProgress && is_object($video)) {
+            $cardProgress = data_get($video, 'id') ? (($video->id * 23) % 55 + 25) : null;
+        }
+    @endphp
+    @if($cardProgress)
+    <div class="absolute bottom-0 left-0 w-full h-1 bg-zinc-800/80 z-20 overflow-hidden">
+        <div class="h-full bg-red-600" style="width: {{ $cardProgress }}%"></div>
     </div>
     @endif
 
