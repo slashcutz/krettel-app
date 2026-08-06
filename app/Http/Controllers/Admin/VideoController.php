@@ -71,19 +71,33 @@ class VideoController extends Controller
             'resolution' => 'nullable|string|max:50',
             'quality' => 'nullable|string|max:50',
             'visibility' => 'required|in:public,private,unlisted',
-            'thumbnail' => 'nullable|url|max:500',
-            'poster' => 'nullable|url|max:500',
+            'thumbnail' => 'nullable|string|max:500',
+            'thumbnail_file' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
+            'poster' => 'nullable|string|max:500',
+            'poster_file' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:4096',
             'trailer_url' => 'nullable|url|max:500',
             'terabox_image' => 'nullable|string|max:500',
             'previews' => 'nullable|array',
             'previews.*' => 'nullable|string|max:500',
         ]);
 
-        $video->update($request->only([
+        $updateData = $request->only([
             'title', 'slug', 'short_description', 'full_description', 'category_id',
             'release_date', 'age_rating', 'video_type', 'resolution', 'quality',
             'visibility', 'thumbnail', 'poster', 'trailer_url', 'terabox_image',
-        ]));
+        ]);
+
+        if ($request->hasFile('thumbnail_file')) {
+            $path = $request->file('thumbnail_file')->store('thumbnails', 'public');
+            $updateData['thumbnail'] = asset('storage/' . $path);
+        }
+
+        if ($request->hasFile('poster_file')) {
+            $path = $request->file('poster_file')->store('posters', 'public');
+            $updateData['poster'] = asset('storage/' . $path);
+        }
+
+        $video->update($updateData);
 
         $video->previews = collect($request->input('previews', []))
             ->filter(fn ($url) => is_string($url) && trim($url) !== '')

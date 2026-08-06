@@ -6,7 +6,7 @@
             <h2 class="text-lg font-bold text-white">Video Details</h2>
         </div>
 
-        <form action="{{ route('admin.videos.update', $video->id) }}" method="POST" class="p-4 sm:p-6">
+        <form action="{{ route('admin.videos.update', $video->id) }}" method="POST" enctype="multipart/form-data" class="p-4 sm:p-6">
             @csrf
             @method('PUT')
 
@@ -69,16 +69,18 @@
 
                 <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
                     <div>
-                        <label for="thumbnail" class="block text-sm font-medium text-white mb-2">Thumbnail URL</label>
-                        <input type="url" name="thumbnail" id="thumbnail" value="{{ old('thumbnail', $video->thumbnail) }}" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                        <label for="thumbnail" class="block text-sm font-medium text-white mb-2">Thumbnail URL / File</label>
+                        <input type="url" name="thumbnail" id="thumbnail" value="{{ old('thumbnail', $video->thumbnail) }}" placeholder="Paste Image URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 mb-2">
+                        <input type="file" name="thumbnail_file" id="thumbnail_file" accept="image/*" class="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:bg-red-600 block w-full cursor-pointer">
                     </div>
                     <div>
-                        <label for="poster" class="block text-sm font-medium text-white mb-2">Poster URL</label>
-                        <input type="url" name="poster" id="poster" value="{{ old('poster', $video->poster) }}" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                        <label for="poster" class="block text-sm font-medium text-white mb-2">Poster URL / File</label>
+                        <input type="url" name="poster" id="poster" value="{{ old('poster', $video->poster) }}" placeholder="Paste Image URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 mb-2">
+                        <input type="file" name="poster_file" id="poster_file" accept="image/*" class="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:bg-red-600 block w-full cursor-pointer">
                     </div>
                     <div>
                         <label for="trailer_url" class="block text-sm font-medium text-white mb-2">Trailer URL</label>
-                        <input type="url" name="trailer_url" id="trailer_url" value="{{ old('trailer_url', $video->trailer_url) }}" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                        <input type="url" name="trailer_url" id="trailer_url" value="{{ old('trailer_url', $video->trailer_url) }}" placeholder="Paste Trailer URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
                     </div>
                 </div>
 
