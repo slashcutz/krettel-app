@@ -33,15 +33,27 @@
             <!-- Video Sections -->
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-20 space-y-12">
                 
-                <!-- Continue Watching (Matching watch page UI) -->
+                <!-- Continue Watching (Matching watch page UI + Swiper Scroll Indicator) -->
                 @if(isset($watchHistory) && $watchHistory->isNotEmpty())
-                <section class="space-y-3">
+                <section x-data="{ 
+                            scrollProgress: 0,
+                            updateScroll() {
+                                const el = this.$refs.rail;
+                                if (!el) return;
+                                const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            }
+                         }" 
+                         x-init="$nextTick(() => updateScroll())"
+                         class="space-y-3">
                     <div class="flex items-center justify-between">
                         <h2 class="text-sm font-bold text-white tracking-wide">Continue Watching</h2>
                         <a href="{{ route('my-list') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
 
-                    <div class="flex space-x-3 overflow-x-auto no-scrollbar py-2">
+                    <div class="flex space-x-3 overflow-x-auto no-scrollbar py-2"
+                         x-ref="rail"
+                         @scroll.passive="updateScroll()">
                         @foreach($watchHistory as $history)
                             @if($history->video)
                                 @php
@@ -88,6 +100,11 @@
                             @endif
                         @endforeach
                     </div>
+
+                    <!-- Swiper Primary Red Progress Bar -->
+                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                        <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
+                    </div>
                 </section>
                 @endif
 
@@ -107,12 +124,25 @@
 
                 <!-- Collections -->
                 @if($collections->isNotEmpty())
-                <section id="collections" class="space-y-3">
+                <section id="collections" 
+                         x-data="{ 
+                            scrollProgress: 0,
+                            updateScroll() {
+                                const el = this.$refs.rail;
+                                if (!el) return;
+                                const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            }
+                         }" 
+                         x-init="$nextTick(() => updateScroll())"
+                         class="space-y-3">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">Collections</h2>
                         <a href="{{ route('collections.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
-                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
+                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1"
+                         x-ref="rail"
+                         @scroll.passive="updateScroll()">
                         @foreach($collections as $collection)
                             @php
                                 $cImage = data_get($collection, 'terabox_image') ?: data_get($collection, 'image');
@@ -131,16 +161,32 @@
                             </a>
                         @endforeach
                     </div>
+                    <!-- Swiper Primary Red Progress Bar -->
+                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                        <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
+                    </div>
                 </section>
                 @endif
 
                 <!-- Trending Now -->
-                <section>
-                    <div class="flex items-center justify-between mb-4">
+                <section x-data="{ 
+                            scrollProgress: 0,
+                            updateScroll() {
+                                const el = this.$refs.rail;
+                                if (!el) return;
+                                const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            }
+                         }" 
+                         x-init="$nextTick(() => updateScroll())"
+                         class="space-y-3">
+                    <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">Trending Now</h2>
                         <a href="{{ route('search.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
-                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
+                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1"
+                         x-ref="rail"
+                         @scroll.passive="updateScroll()">
                         @forelse($trending as $video)
                             <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
                                 <x-video-card :video="$video" />
@@ -149,15 +195,31 @@
                             <p class="text-muted">No trending videos yet.</p>
                         @endforelse
                     </div>
+                    <!-- Swiper Primary Red Progress Bar -->
+                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                        <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
+                    </div>
                 </section>
 
                 <!-- New Releases -->
-                <section>
-                    <div class="flex items-center justify-between mb-4">
+                <section x-data="{ 
+                            scrollProgress: 0,
+                            updateScroll() {
+                                const el = this.$refs.rail;
+                                if (!el) return;
+                                const maxScroll = el.scrollWidth - el.clientWidth;
+                                this.scrollProgress = maxScroll > 0 ? Math.min(100, Math.max(0, (el.scrollLeft / maxScroll) * 100)) : 0;
+                            }
+                         }" 
+                         x-init="$nextTick(() => updateScroll())"
+                         class="space-y-3">
+                    <div class="flex items-center justify-between mb-2">
                         <h2 class="text-xl md:text-2xl font-bold text-white">New Releases</h2>
                         <a href="{{ route('search.index') }}" class="text-xs font-semibold text-red-600 hover:underline">See All</a>
                     </div>
-                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1">
+                    <div class="flex space-x-4 overflow-x-auto no-scrollbar py-1"
+                         x-ref="rail"
+                         @scroll.passive="updateScroll()">
                         @forelse($newReleases as $video)
                             <div class="w-[calc(50%-8px)] sm:w-52 md:w-60 flex-shrink-0">
                                 <x-video-card :video="$video" />
@@ -165,6 +227,10 @@
                         @empty
                             <p class="text-muted">No new releases yet.</p>
                         @endforelse
+                    </div>
+                    <!-- Swiper Primary Red Progress Bar -->
+                    <div class="w-full h-1 bg-zinc-800/60 rounded-full overflow-hidden mt-2">
+                        <div class="h-full bg-red-600 transition-all duration-150 rounded-full" :style="`width: ${Math.max(15, scrollProgress)}%`"></div>
                     </div>
                 </section>
 
