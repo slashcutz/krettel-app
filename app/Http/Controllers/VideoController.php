@@ -290,11 +290,90 @@ class VideoController extends Controller
                 $dlink = $terabox->getDirectLink($video->storage_folder);
             }
 
-            return redirect()->away($dlink);
+            // Determine Content-Type
+            $ext = strtolower(pathinfo($video->storage_folder, PATHINFO_EXTENSION));
+            $mimeMap = [
+                'mp4'  => 'video/mp4',
+                'mkv'  => 'video/x-matroska',
+                'webm' => 'video/webm',
+                'avi'  => 'video/x-msvideo',
+                'mov'  => 'video/quicktime',
+            ];
+            $contentType = $mimeMap[$ext] ?? 'video/mp4';
+
+            // Forward the Range header to TeraBox for seeking
+            $opts = [
+                'http' => [
+                    'method' => 'GET',
+                    'header' => "User-Agent: " . config('terabox.user_agent') . "\r\n" .
+                                "Referer: https://www.1024terabox.com/\r\n"
+                ]
+            ];
+
+            $clientRange = request()->header('Range');
+            if ($clientRange) {
+                $opts['http']['header'] .= "Range: " . $clientRange . "\r\n";
+            }
+
+            $context = stream_context_create($opts);
+            $stream = fopen($dlink, 'rb', false, $context);
+
+            if (!$stream) {
+                throw new \RuntimeException('Failed to open remote stream.');
+            }
+
+            // Read the stream headers returned by TeraBox
+            $metaData = stream_get_meta_data($stream);
+            $wrapperData = $metaData['wrapper_data'] ?? [];
+            
+            $contentLength = null;
+            $contentRange = null;
+            $statusCode = 200;
+
+            foreach ($wrapperData as $headerLine) {
+                if (preg_match('/^HTTP\/\d\.\d\s+(\d+)/i', $headerLine, $matches)) {
+                    $statusCode = (int)$matches[1];
+                } elseif (preg_match('/^Content-Length:\s*(\d+)/i', $headerLine, $matches)) {
+                    $contentLength = $matches[1];
+                } elseif (preg_match('/^Content-Range:\s*(.+)/i', $headerLine, $matches)) {
+                    $contentRange = $matches[1];
+                }
+            }
+
+            $headers = [
+                'Content-Type' => $contentType,
+                'Accept-Ranges' => 'bytes',
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+            ];
+
+            if ($contentLength !== null) {
+                $headers['Content-Length'] = $contentLength;
+            }
+            if ($contentRange !== null) {
+                $headers['Content-Range'] = $contentRange;
+            }
+
+            return response()->stream(function () use ($stream) {
+                // Turn off PHP output buffering execution limits
+                if (function_exists('apache_setenv')) {
+                    @apache_setenv('no-gzip', 1);
+                }
+                @ini_set('zlib.output_compression', 'Off');
+                @ob_implicit_flush(true);
+                @ob_end_clean();
+
+                while (!feof($stream) && connection_status() == 0) {
+                    echo fread($stream, 1024 * 128); // Read in 128KB chunks
+                    flush();
+                }
+                fclose($stream);
+            }, $statusCode, $headers);
 
         } catch (\Throwable $e) {
-            Log::error('[STREAM-DIRECT] Failed: ' . $e->getMessage());
-            abort(502, 'Stream failed: ' . $e->getMessage());
+            Log::error('[STREAM-DIRECT] Proxy Failed: ' . $e->getMessage());
+            abort(502, 'Stream proxy failed: ' . $e->getMessage());
         }
     }
 
