@@ -110,7 +110,19 @@ class TeraBoxClient
         // what also detects expiry and surfaces the admin notification).
         $ndus = \App\Models\Setting::get('terabox_ndus') ?: config('terabox.ndus');
         if ($ndus) {
-            $this->verifySession();
+            try {
+                $this->verifySession();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[TERABOX-SESSION] Stored NDUS cookie failed verification, attempting credentials auto-login: ' . $e->getMessage());
+                
+                $email = \App\Models\Setting::get('terabox_email') ?: config('terabox.email');
+                $password = \App\Models\Setting::get('terabox_password') ?: config('terabox.password');
+                if ($email && $password) {
+                    $this->login($email, $password);
+                } else {
+                    throw $e;
+                }
+            }
         }
     }
 
