@@ -1,12 +1,12 @@
 <x-admin-layout>
     <x-slot name="header">Edit Video: {{ $video->title }}</x-slot>
 
-    <div class="max-w-4xl bg-card border border-border rounded-xl overflow-hidden">
+    <div class="max-w-5xl mx-auto bg-card border border-border rounded-xl overflow-hidden">
         <div class="px-4 sm:px-6 py-4 border-b border-border">
             <h2 class="text-lg font-bold text-white">Video Details</h2>
         </div>
 
-        <form action="{{ route('admin.videos.update', $video->id) }}" method="POST" enctype="multipart/form-data" class="p-4 sm:p-6">
+        <form action="{{ route('admin.videos.update', $video->id) }}" method="POST" enctype="multipart/form-data" class="p-4 sm:p-6 lg:p-8">
             @csrf
             @method('PUT')
 

@@ -265,7 +265,7 @@
         </header>
 
         <!-- Page Content -->
-        <main class="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 lg:pb-6 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent">
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent">
             {{ $slot }}
         </main>
 
