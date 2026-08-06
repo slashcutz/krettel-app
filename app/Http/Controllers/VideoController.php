@@ -287,7 +287,7 @@ class VideoController extends Controller
             return redirect()->away($dlink);
         } catch (\Throwable $e) {
             Log::error('[STREAM-DIRECT] Failed: ' . $e->getMessage());
-            abort(502, 'Failed to resolve high quality stream.');
+            abort(502, 'Failed to resolve high quality stream: ' . $e->getMessage());
         }
     }
 }
