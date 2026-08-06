@@ -290,69 +290,11 @@ class VideoController extends Controller
                 $dlink = $terabox->getDirectLink($video->storage_folder);
             }
 
-            // Determine content type from file extension
-            $ext = strtolower(pathinfo($video->storage_folder, PATHINFO_EXTENSION));
-            $mimeMap = [
-                'mp4'  => 'video/mp4',
-                'mkv'  => 'video/x-matroska',
-                'webm' => 'video/webm',
-                'avi'  => 'video/x-msvideo',
-                'mov'  => 'video/quicktime',
-            ];
-            $contentType = $mimeMap[$ext] ?? 'video/mp4';
-
-            // Build headers for the TeraBox request
-            $teraHeaders = [
-                'User-Agent' => config('terabox.user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'),
-                'Referer' => 'https://www.1024terabox.com/',
-                'Accept' => '*/*',
-            ];
-
-            // Forward Range header from the client for seeking support
-            $clientRange = request()->header('Range');
-            if ($clientRange) {
-                $teraHeaders['Range'] = $clientRange;
-            }
-
-            $client = new \GuzzleHttp\Client(['timeout' => 0, 'stream' => true]);
-            $teraResponse = $client->request('GET', $dlink, [
-                'headers' => $teraHeaders,
-                'stream' => true,
-                'allow_redirects' => ['max' => 5, 'strict' => true, 'referer' => true],
-            ]);
-
-            $statusCode = $teraResponse->getStatusCode();
-            $body = $teraResponse->getBody();
-
-            $responseHeaders = [
-                'Content-Type' => $contentType,
-                'Accept-Ranges' => 'bytes',
-                'Cache-Control' => 'no-cache',
-                'Access-Control-Allow-Origin' => '*',
-            ];
-
-            // Forward content-length and content-range from TeraBox
-            if ($teraResponse->hasHeader('Content-Length')) {
-                $responseHeaders['Content-Length'] = $teraResponse->getHeaderLine('Content-Length');
-            }
-            if ($teraResponse->hasHeader('Content-Range')) {
-                $responseHeaders['Content-Range'] = $teraResponse->getHeaderLine('Content-Range');
-            }
-
-            return response()->stream(function () use ($body) {
-                while (!$body->eof()) {
-                    echo $body->read(65536); // 64KB chunks
-                    if (connection_aborted()) {
-                        break;
-                    }
-                    flush();
-                }
-                $body->close();
-            }, $statusCode, $responseHeaders);
+            return redirect()->away($dlink);
 
         } catch (\Throwable $e) {
             Log::error('[STREAM-DIRECT] Failed: ' . $e->getMessage());
-            abort(502, 'Stream proxy failed: ' . $e->getMessage());
+            abort(502, 'Stream failed: ' . $e->getMessage());
         }
     }
 
