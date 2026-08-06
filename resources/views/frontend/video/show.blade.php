@@ -739,7 +739,7 @@
                     
                     <!-- Top Bar -->
                     <div class="flex justify-between items-center w-full pointer-events-auto px-3 py-2">
-                        <button @click.stop="toggleMiniPlayer()" class="p-1.5 rounded-full hover:bg-white/10 text-white/90 active:scale-95 transition" :class="{ 'text-primary': miniPlayer }" :title="miniPlayer ? 'Exit Mini Player' : 'Mini Player'">
+                        <button @click.stop="togglePictureInPicture()" class="p-1.5 rounded-full hover:bg-white/10 text-white/90 active:scale-95 transition" :class="{ 'text-primary': isPictureInPicture }" :title="isPictureInPicture ? 'Exit Mini Player' : 'Mini Player'">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
                         
