@@ -37,6 +37,8 @@ if [ "$migrated" != "true" ]; then
     exit 1
 fi
 
+php artisan db:seed --class=AdminUserSeeder --force || true
+
 php artisan optimize || true
 
 # ---------------------------------------------------------------------------

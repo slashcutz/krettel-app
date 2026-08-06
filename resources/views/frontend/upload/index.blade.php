@@ -99,8 +99,7 @@
                                                 @forelse($categories as $cat)
                                                     <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                                                 @empty
-                                                    <option value="1">Movies</option>
-                                                    <option value="2">TV Shows</option>
+                                                    <option value="" disabled>No categories available</option>
                                                 @endforelse
                                             </select>
                                         </div>

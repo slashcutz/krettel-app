@@ -1,23 +1,30 @@
 # Render blueprint — deploys the Laravel app as ONE container that runs
-# Nginx + PHP-FPM + the queue worker together, sharing a persistent Disk.
-# This keeps the locally-transcoded HLS files visible to both the worker
+# Nginx + PHP-FPM + FFmpeg + the queue worker together, sharing a persistent
+# Disk. This keeps the locally-transcoded HLS files visible to both the worker
 # (which writes them) and the web server (which streams them).
 #
 # Before deploying:
-#   1. Push this repo to GitHub and set `repo` / `branch` below.
-#   2. Render has no managed MySQL — set DB_HOST / DB_DATABASE / DB_USERNAME /
-#      DB_PASSWORD to an external MySQL instance (the env vars are marked
-#      `sync: false`; fill them in the Render dashboard).
+#   1. Connect this GitHub repo (slashcutz/krettel-app) to Render via the
+#      Render Dashboard -> New -> Blueprint, or "New Web Service" -> "Docker".
+#   2. Render has no managed MySQL — set DB_HOST / DB_PORT / DB_DATABASE /
+#      DB_USERNAME / DB_PASSWORD to an external MySQL instance (these env vars
+#      are marked `sync: false`; fill them in the Render dashboard).
 #   3. Set APP_URL to your app's *.onrender.com (or custom domain) URL.
 #   4. Set the TERABOX_* credentials (same as your local .env).
+#   5. Recommend the `standard` plan (or higher) when you need in-container
+#      HLS transcoding — the `starter`/`free` plans (512MB) can OOM while
+#      ffmpeg muxes/encodes large files.
+#
+# Cache/queue/session all use the DATABASE driver (app defaults), so no
+# separate Redis service is required.
 
 services:
   - type: web
     name: krettel-app
     runtime: docker
-    repo: https://github.com/YOUR_ORG/YOUR_REPO # <- replace
+    repo: https://github.com/slashcutz/krettel-app
     branch: main
-    plan: starter
+    plan: standard
     dockerContext: .
     dockerfilePath: ./Dockerfile
     healthCheckPath: /login
@@ -34,19 +41,13 @@ services:
         generateValue: true
       - key: APP_URL
         sync: false
+      # DB-backed session / cache / queue (no Redis needed)
       - key: SESSION_DRIVER
         value: database
       - key: CACHE_STORE
-        value: redis
+        value: database
       - key: QUEUE_CONNECTION
-        value: redis
-      - key: REDIS_CLIENT
-        value: phpredis
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: krettel-redis
-          property: connectionString
+        value: database
       # External MySQL (Render does not manage MySQL)
       - key: DB_CONNECTION
         value: mysql
@@ -73,10 +74,3 @@ services:
         value: https://www.1024terabox.com
       # FFMPEG_BINARY / FFPROBE_BINARY: intentionally unset — the image ships
       # ffmpeg/ffprobe on PATH, matching the config defaults.
-
-  # Managed Redis (Key Value) — powers the queue + cache. The internal
-  # connection string is injected into REDIS_URL on the web service above.
-  - type: keyvalue
-    name: krettel-redis
-    plan: free
-    ipAllowList: []
