@@ -272,8 +272,8 @@
         <!-- Mobile/Tablet Bottom Navigation (desktop uses sidebar) -->
         <x-admin-mobile-nav />
 
-        <!-- Footer -->
-        <footer class="px-6 py-4 border-t border-border bg-background/95 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">
+        <!-- Footer (desktop only – mobile uses bottom nav) -->
+        <footer class="hidden lg:flex px-6 py-4 border-t border-border bg-background/95 flex-shrink-0 items-center justify-between gap-2 text-xs text-muted">
             <p>&copy; {{ date('Y') }} {{ config('app.name', 'Krettel') }}. All rights reserved.</p>
             <div class="flex items-center space-x-4">
                 <a href="{{ route('home') }}" class="hover:text-white transition-colors">Frontend</a>
