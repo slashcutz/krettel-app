@@ -39,15 +39,15 @@
                                  <h3 class="text-xl font-bold text-white mb-4">Media Upload</h3>
                                  
                                  <!-- Source selector tabs -->
-                                 <div class="flex bg-secondary/40 rounded-xl p-1 mb-6 max-w-md border border-white/5">
-                                     <button type="button" @click="mediaSource = 'upload'" class="flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all" :class="mediaSource === 'upload' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-white'">Upload Video File</button>
-                                     <button type="button" @click="mediaSource = 'terabox'" class="flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all" :class="mediaSource === 'terabox' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-white'">Link Existing TeraBox File</button>
+                                 <div class="flex bg-secondary/40 rounded-xl p-1 mb-6 max-w-md border border-white/5" x-data="{ init() { mediaSource = 'direct' } }">
+                                     <button type="button" @click="mediaSource = 'direct'" class="flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all" :class="mediaSource === 'direct' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-white'">Direct Upload</button>
+                                     <button type="button" @click="mediaSource = 'manual'" class="flex-1 text-center py-2 rounded-lg text-xs font-bold transition-all" :class="mediaSource === 'manual' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-white'">Manual Upload</button>
                                  </div>
 
                                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                      <!-- Video Selection Slot -->
                                      <div>
-                                         <template x-if="mediaSource === 'upload'">
+                                         <template x-if="mediaSource === 'direct'">
                                              <div @click="triggerFile('video_file_input')" class="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-primary transition-colors cursor-pointer group min-h-[180px]">
                                                  <svg class="w-10 h-10 text-muted group-hover:text-primary mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                                                  <template x-if="!videoPreview">
@@ -64,7 +64,7 @@
                                              </div>
                                          </template>
 
-                                         <template x-if="mediaSource === 'terabox'">
+                                         <template x-if="mediaSource === 'manual'">
                                              <div class="bg-secondary/20 border border-border rounded-xl p-6 min-h-[180px] flex flex-col justify-center">
                                                  <label for="terabox_file_path" class="block text-sm font-medium text-white mb-2">TeraBox File Name or Path</label>
                                                  <input type="text" name="terabox_file_path" id="terabox_file_path" placeholder="e.g. Captain_America.mp4" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
