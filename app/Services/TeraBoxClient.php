@@ -174,15 +174,17 @@ class TeraBoxClient
      */
     protected function setSessionCookie(string $name, string $value): void
     {
-        $this->setCookie($name, $value, self::DOMAIN);
+        $this->setCookie($name, $value, '.terabox.com');
+        $this->setCookie($name, $value, 'terabox.com');
         $this->setCookie($name, $value, '.1024terabox.com');
+        $this->setCookie($name, $value, '1024terabox.com');
 
-        // If web host points at a 1024terabox.com node, use its base domain too.
         $host = parse_url($this->whost, PHP_URL_HOST);
-        if (is_string($host) && str_ends_with($host, '1024terabox.com')) {
-            $this->setCookie($name, $value, '.1024terabox.com');
-        } elseif (is_string($host) && str_ends_with($host, 'terabox.com')) {
-            $this->setCookie($name, $value, '.terabox.com');
+        if (is_string($host)) {
+            $this->setCookie($name, $value, $host);
+            if (str_starts_with($host, 'www.')) {
+                $this->setCookie($name, $value, substr($host, 3));
+            }
         }
     }
 
