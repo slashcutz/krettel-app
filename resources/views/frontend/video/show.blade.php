@@ -489,7 +489,7 @@
                     },
 
                     skipIntro() {
-                        this.seekTo(15);
+                        this.seekTo(95);
                     },
 
                     restart() {
@@ -875,8 +875,11 @@
                             <span class="text-zinc-400" x-text="formatTime(duration)"></span>
                         </div>
 
-                        <!-- Center: Skip Intro -->
-                        <button @click.stop="skipIntro()" class="bg-black/60 backdrop-blur-md border border-zinc-700/80 px-3 py-1.5 rounded-xl flex items-center space-x-1.5 font-semibold text-xs text-zinc-200 active:scale-95 transition flex-shrink-0">
+                        <!-- Center: Skip Intro (Dynamic like Netflix/Hotstar, visible only during the opening credits) -->
+                        <button x-show="duration > 120 && currentTime >= 5 && currentTime <= 95"
+                                @click.stop="skipIntro()" 
+                                x-transition
+                                class="bg-black/60 backdrop-blur-md border border-zinc-700/80 px-3 py-1.5 rounded-xl flex items-center space-x-1.5 font-semibold text-xs text-zinc-200 active:scale-95 transition flex-shrink-0">
                             <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
                             <span>Skip Intro</span>
                         </button>
