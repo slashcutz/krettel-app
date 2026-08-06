@@ -13,7 +13,7 @@
             <a href="{{ route('admin.categories.create') }}" class="bg-primary hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium w-full sm:w-auto text-center">Add Category</a>
         </div>
         
-        <div class="overflow-x-auto">
+        <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left text-sm text-muted">
                 <thead class="text-xs uppercase bg-secondary/50 text-muted">
                     <tr>
@@ -58,6 +58,41 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+
+        <!-- Mobile Card List -->
+        <div class="md:hidden divide-y divide-border">
+            @forelse($categories as $category)
+            <div class="p-4">
+                <div class="flex items-center gap-3">
+                    @if($category->icon)
+                        <i class="{{ $category->icon }} text-primary text-xl flex-shrink-0"></i>
+                    @endif
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{{ $category->name }}</p>
+                        <p class="text-xs text-muted truncate">{{ $category->slug }}</p>
+                    </div>
+                    @if($category->is_active)
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-success/20 text-success flex-shrink-0">Active</span>
+                    @else
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-secondary text-muted flex-shrink-0">Inactive</span>
+                    @endif
+                </div>
+                <div class="mt-3 flex items-center justify-between">
+                    <span class="text-xs text-muted">Sort: {{ $category->sort_order }}</span>
+                    <div class="flex items-center gap-6">
+                        <a href="{{ route('admin.categories.edit', $category->id) }}" class="text-sm font-medium text-primary hover:underline">Edit</a>
+                        <form action="{{ route('admin.categories.destroy', $category->id) }}" method="POST">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="text-sm text-muted hover:text-white" onclick="return confirm('Are you sure you want to delete this category?');">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            @empty
+                <p class="px-4 py-8 text-center text-sm text-muted">No categories found.</p>
+            @endforelse
         </div>
         
         <div class="px-6 py-4 border-t border-border">

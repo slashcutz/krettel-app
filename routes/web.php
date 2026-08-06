@@ -23,8 +23,8 @@ Route::get('/my-list', [\App\Http\Controllers\ListController::class, 'index'])->
 Route::post('/list/toggle', [\App\Http\Controllers\ListController::class, 'toggle'])->name('list.toggle');
 Route::post('/analytics/watch-time', [\App\Http\Controllers\AnalyticsController::class, 'logWatchTime'])->name('analytics.watch_time');
 Route::get('/terabox/image/{model}/{id}', [\App\Http\Controllers\TeraBoxImageController::class, 'show'])
-    ->where('model', 'video|collection')
-    ->where('id', '[0-9]+')
+    ->where('model', 'video|collection|settings')
+    ->where('id', '[a-zA-Z0-9_]+')
     ->name('terabox.image');
 
 Route::get('/dashboard', [\App\Http\Controllers\UserDashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');

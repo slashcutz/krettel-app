@@ -1,7 +1,7 @@
 <x-admin-layout>
     <x-slot name="header">Platform Settings</x-slot>
 
-    <div class="w-full" x-data="{ logoPreview: '{{ $settings['navbar_logo'] ?? asset('images/logo.png') }}', colorValue: '{{ old('primary_color', $settings['primary_color'] ?? '#EF4444') }}', showPassword: false }">
+    <div class="w-full" x-data="{ logoPreview: '{{ \App\Support\TeraBoxImage::url($settings['navbar_logo'] ?? null, 'settings', 'navbar_logo') ?: asset('images/logo.png') }}', colorValue: '{{ old('primary_color', $settings['primary_color'] ?? '#EF4444') }}', showPassword: false }">
         <form action="{{ route('admin.settings.store') }}" method="POST" enctype="multipart/form-data">
             @csrf
 

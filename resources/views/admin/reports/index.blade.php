@@ -1,9 +1,9 @@
 <x-admin-layout>
     <x-slot name="header">Platform Reports</x-slot>
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
         <!-- Total Watch Time -->
-        <div class="bg-card border border-border rounded-xl p-6 relative overflow-hidden group">
+        <div class="bg-card border border-border rounded-xl p-4 md:p-6 relative overflow-hidden group">
             <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <svg class="w-16 h-16 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
@@ -12,9 +12,9 @@
         </div>
 
         <!-- Device Breakdown -->
-        <div class="lg:col-span-3 bg-card border border-border rounded-xl p-6">
+        <div class="sm:col-span-2 lg:col-span-3 bg-card border border-border rounded-xl p-4 md:p-6">
             <h3 class="text-sm font-semibold text-muted uppercase tracking-wider mb-4">Views by Device Type</h3>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
                 @foreach(['desktop' => 'Desktop', 'mobile' => 'Mobile', 'tablet' => 'Tablet', 'tv' => 'Smart TV'] as $key => $label)
                     @php
                         $stat = $deviceAnalytics->firstWhere('device_type', $key);
@@ -35,7 +35,7 @@
             <div class="px-6 py-4 border-b border-border">
                 <h2 class="text-lg font-bold text-white">Top 10 Performing Videos</h2>
             </div>
-            <div class="overflow-x-auto">
+            <div class="hidden md:block overflow-x-auto">
                 <table class="w-full text-left text-sm text-muted">
                     <thead class="text-xs uppercase bg-secondary/50 text-muted">
                         <tr>
@@ -57,6 +57,16 @@
                     </tbody>
                 </table>
             </div>
+            <div class="md:hidden divide-y divide-border">
+                @forelse($topVideos as $video)
+                <div class="p-4 flex items-center justify-between gap-3">
+                    <p class="text-sm font-medium text-white line-clamp-2">{{ $video->title }}</p>
+                    <span class="text-sm font-bold text-success flex-shrink-0">{{ number_format($video->views) }}</span>
+                </div>
+                @empty
+                    <p class="px-4 py-8 text-center text-sm text-muted">No data available.</p>
+                @endforelse
+            </div>
         </div>
 
         <!-- Latest Signups -->
@@ -64,7 +74,7 @@
             <div class="px-6 py-4 border-b border-border">
                 <h2 class="text-lg font-bold text-white">Latest User Signups</h2>
             </div>
-            <div class="overflow-x-auto">
+            <div class="hidden md:block overflow-x-auto">
                 <table class="w-full text-left text-sm text-muted">
                     <thead class="text-xs uppercase bg-secondary/50 text-muted">
                         <tr>
@@ -87,6 +97,20 @@
                         @endforelse
                     </tbody>
                 </table>
+            </div>
+            <div class="md:hidden divide-y divide-border">
+                @forelse($recentUsers as $user)
+                <div class="p-4 flex items-center gap-3">
+                    <img src="https://ui-avatars.com/api/?name={{ urlencode($user->name) }}&background=2A2D34&color=fff" class="w-9 h-9 rounded-full flex-shrink-0">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{{ $user->name }}</p>
+                        <p class="text-xs text-muted truncate">{{ $user->email }}</p>
+                    </div>
+                    <span class="text-xs text-muted flex-shrink-0">{{ $user->created_at->diffForHumans() }}</span>
+                </div>
+                @empty
+                    <p class="px-4 py-8 text-center text-sm text-muted">No users found.</p>
+                @endforelse
             </div>
         </div>
 

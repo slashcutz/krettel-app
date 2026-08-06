@@ -8,6 +8,7 @@ use App\Jobs\TranscodeVideoToHls;
 use App\Jobs\UploadVideoToTeraBox;
 use App\Support\LanguageCodes;
 use App\Support\MediaProbe;
+use App\Support\TeraBoxImageStore;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -84,9 +85,25 @@ class VideoUploadController extends Controller
         }
 
         $thumbnailPath = null;
+        $teraboxImage = $request->input('terabox_image');
         if ($request->hasFile('thumbnail')) {
-            $thumbnailPath = $request->file('thumbnail')->store('thumbnails', 'public');
-            Log::channel('krettel')->info('[UPLOAD] Thumbnail stored on public disk.', ['thumbnail' => $thumbnailPath]);
+            $thumbnailFile = $request->file('thumbnail');
+            $thumbnailPath = $thumbnailFile->store('thumbnails', 'public');
+
+            $teraboxRef = TeraBoxImageStore::upload(
+                $thumbnailFile,
+                TeraBoxImageStore::remoteDir('VideoThumbnails'),
+                'thumb-' . $slug . '.' . $thumbnailFile->getClientOriginalExtension()
+            );
+
+            if ($teraboxRef) {
+                $teraboxImage = $teraboxRef;
+            }
+
+            Log::channel('krettel')->info('[UPLOAD] Thumbnail stored.', [
+                'thumbnail' => $thumbnailPath,
+                'terabox_image' => $teraboxImage,
+            ]);
         }
 
         $video = Video::create([
@@ -102,7 +119,7 @@ class VideoUploadController extends Controller
             'keywords' => $request->input('keywords'),
             'video_url' => $videoPath ?? 'pending-upload',
             'thumbnail' => $thumbnailPath,
-            'terabox_image' => $request->input('terabox_image'),
+            'terabox_image' => $teraboxImage,
             'previews' => collect($request->input('previews', []))
                 ->filter(fn ($url) => is_string($url) && trim($url) !== '')
                 ->values()

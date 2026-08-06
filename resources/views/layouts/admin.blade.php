@@ -110,13 +110,13 @@
       x-data="{ sidebarOpen: window.innerWidth >= 1024 }" x-cloak>
 
     <!-- Mobile Overlay -->
-    <div x-show="!sidebarOpen" @click="sidebarOpen = true" x-transition.opacity class="fixed inset-0 bg-black/60 z-30 lg:hidden" style="display: none;"></div>
+    <div x-show="sidebarOpen" @click="sidebarOpen = false" x-transition.opacity class="fixed inset-0 bg-black/60 z-30 lg:hidden" style="display: none;"></div>
 
     <!-- Sidebar -->
-    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed lg:static inset-y-0 left-0 w-64 bg-secondary/90 backdrop-blur border-r border-border flex flex-col transition-all duration-300 relative z-40 lg:z-20">
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed lg:static inset-y-0 left-0 w-64 bg-secondary/90 backdrop-blur border-r border-border flex flex-col transition-all duration-300 z-40 lg:z-20">
         <div class="h-16 flex items-center justify-between px-6 border-b border-border">
             <a href="{{ route('admin.dashboard') }}" class="flex items-center min-w-0">
-                <img src="{{ \App\Models\Setting::get('navbar_logo') ?: asset('images/logo.png') }}" alt="{{ config('app.name', 'Krettel') }} logo" class="h-10 w-auto object-contain">
+                <img src="{{ \App\Support\TeraBoxImage::url(\App\Models\Setting::get('navbar_logo'), 'settings', 'navbar_logo') ?: asset('images/logo.png') }}" alt="{{ config('app.name', 'Krettel') }} logo" class="h-12 lg:h-10 w-auto object-contain">
             </a>
             <button @click="sidebarOpen = false" class="lg:hidden text-muted hover:text-white" aria-label="Close menu">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -201,8 +201,8 @@
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                         <span x-show="pendingCount > 0" class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-primary ring-2 ring-background animate-ping"></span>
                     </button>
-                    <!-- Notifications Dropdown -->
-                    <div x-show="open" @click.away="open = false" x-transition class="absolute right-0 mt-2 w-80 bg-card border border-border rounded-xl shadow-lg py-2 z-50 overflow-hidden" style="display: none;">
+                    <!-- Notifications Dropdown (full-width sheet on mobile/tablet, card on desktop) -->
+                    <div x-show="open" @click.away="open = false" x-transition class="fixed md:absolute top-16 left-2 right-2 md:left-auto md:right-0 md:top-auto md:mt-2 md:w-80 bg-card border border-border rounded-xl shadow-lg py-2 z-50 overflow-hidden" style="display: none;">
                         <!-- TeraBox cookie expiry alert -->
                         <a href="{{ route('admin.settings.index') }}" x-show="teraboxExpired" class="flex items-start px-4 py-3 bg-warning/10 hover:bg-warning/15 transition-colors space-x-3 border-b border-border">
                             <svg class="w-5 h-5 text-warning flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -265,9 +265,12 @@
         </header>
 
         <!-- Page Content -->
-        <main class="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent">
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 lg:pb-6 scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent">
             {{ $slot }}
         </main>
+
+        <!-- Mobile/Tablet Bottom Navigation (desktop uses sidebar) -->
+        <x-admin-mobile-nav />
 
         <!-- Footer -->
         <footer class="px-6 py-4 border-t border-border bg-background/95 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">

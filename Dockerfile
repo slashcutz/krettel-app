@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         pdo_mysql \
         bcmath \
         mbstring \
+        exif \
         opcache \
         pcntl \
         gd \

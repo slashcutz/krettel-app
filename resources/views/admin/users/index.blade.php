@@ -7,7 +7,7 @@
             <a href="{{ route('admin.users.create') }}" class="bg-primary hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium w-full sm:w-auto text-center">Add User</a>
         </div>
         
-        <div class="overflow-x-auto">
+        <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left text-sm text-muted">
                 <thead class="text-xs uppercase bg-secondary/50 text-muted">
                     <tr>
@@ -46,6 +46,40 @@
                     @endforeach
                 </tbody>
             </table>
+        </div>
+
+        <!-- Mobile Card List -->
+        <div class="md:hidden divide-y divide-border">
+            @foreach($users as $user)
+            <div class="p-4">
+                <div class="flex items-center gap-3">
+                    <img src="https://ui-avatars.com/api/?name={{ urlencode($user->name) }}&background=2A2D34&color=fff" class="w-10 h-10 rounded-full flex-shrink-0">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{{ $user->name }}</p>
+                        <p class="text-xs text-muted truncate">{{ $user->email }}</p>
+                    </div>
+                    @if($user->hasRole('Super Admin'))
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-primary/20 text-primary flex-shrink-0">Super Admin</span>
+                    @else
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-secondary text-muted flex-shrink-0">User</span>
+                    @endif
+                </div>
+                <div class="mt-3 flex items-center justify-between">
+                    <span class="text-xs text-muted">Joined {{ $user->created_at->format('M d, Y') }}</span>
+                    <div class="flex items-center gap-6">
+                        <a href="{{ route('admin.users.edit', $user->id) }}" class="text-sm font-medium text-primary hover:underline">Edit</a>
+                        <form id="user-delete-{{ $user->id }}" action="{{ route('admin.users.destroy', $user->id) }}" method="POST">
+                            @csrf
+                            @method('DELETE')
+                            <button type="button" onclick="confirmDelete('user-delete-{{ $user->id }}', '{{ addslashes($user->name) }}')" class="text-sm text-muted hover:text-white">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            @endforeach
+            @if($users->isEmpty())
+                <p class="px-4 py-8 text-center text-sm text-muted">No users found.</p>
+            @endif
         </div>
         
         <div class="px-6 py-4 border-t border-border">

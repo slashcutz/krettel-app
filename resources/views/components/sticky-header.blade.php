@@ -28,7 +28,7 @@
             <!-- Logo -->
             <div x-show="!open" class="flex-shrink-0 flex items-center overflow-visible">
                 <a href="{{ Auth::check() ? route('dashboard') : route('home') }}" class="flex items-center -ml-2">
-                    <img src="{{ \App\Models\Setting::get('navbar_logo') ?: asset('images/logo.png') }}" alt="Krettel" class="h-20 sm:h-28 md:h-40 w-auto object-contain drop-shadow-lg scale-110 md:scale-125 transform origin-left">
+                    <img src="{{ \App\Support\TeraBoxImage::url(\App\Models\Setting::get('navbar_logo'), 'settings', 'navbar_logo') ?: asset('images/logo.png') }}" alt="Krettel" class="h-20 sm:h-28 md:h-40 w-auto object-contain drop-shadow-lg scale-110 md:scale-125 transform origin-left">
                 </a>
             </div>
 

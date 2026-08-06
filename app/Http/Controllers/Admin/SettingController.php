@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Setting;
+use App\Support\TeraBoxImageStore;
+use Illuminate\Support\Str;
 
 class SettingController extends Controller
 {
@@ -52,9 +54,14 @@ class SettingController extends Controller
 
         if ($request->hasFile('navbar_logo')) {
             $logo = $request->file('navbar_logo');
-            $filename = 'logo.' . $logo->getClientOriginalExtension();
+            $filename = 'logo-' . Str::random(8) . '.' . $logo->getClientOriginalExtension();
             $logo->storeAs('settings', $filename, 'public');
             Setting::set('navbar_logo', '/storage/settings/' . $filename);
+
+            $ref = TeraBoxImageStore::upload($logo, TeraBoxImageStore::remoteDir('Settings'), $filename);
+            if ($ref) {
+                Setting::set('navbar_logo', $ref);
+            }
         }
 
         foreach (['terabox_email', 'terabox_password', 'terabox_ndus', 'terabox_remote_dir', 'terabox_web_host'] as $key) {

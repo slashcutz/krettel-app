@@ -5,9 +5,9 @@
             <div class="bg-card overflow-hidden shadow-sm sm:rounded-lg border border-border">
                 
                 <!-- Wizard Header / Progress -->
-                <div class="border-b border-border bg-secondary/50 p-6 flex justify-between items-center">
-                    <h2 class="text-2xl font-bold text-white">Upload Video</h2>
-                    <div class="flex items-center space-x-2 text-sm">
+                <div class="border-b border-border bg-secondary/50 p-4 sm:p-6 flex justify-between items-center gap-3">
+                    <h2 class="text-xl sm:text-2xl font-bold text-white">Upload Video</h2>
+                    <div class="flex items-center space-x-2 text-sm flex-shrink-0">
                         <span class="text-muted">Step</span>
                         <span class="text-white font-bold px-2 py-1 bg-primary rounded-md" x-text="step"></span>
                         <span class="text-muted">of 7</span>
@@ -15,12 +15,12 @@
                 </div>
 
                 <div class="flex flex-col md:flex-row min-h-[600px]">
-                    <!-- Sidebar Navigation -->
-                    <div class="w-full md:w-64 border-r border-border bg-secondary/20 p-4 space-y-2">
+                    <!-- Sidebar Navigation (horizontal stepper on mobile) -->
+                    <div class="flex md:flex-col overflow-x-auto md:overflow-visible md:w-64 border-b md:border-b-0 md:border-r border-border bg-secondary/20 p-3 md:p-4 gap-2 md:space-y-2">
                         <template x-for="(s, index) in steps" :key="index">
                             <button 
                                 @click="step = index + 1"
-                                class="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between"
+                                class="flex-1 md:flex-none whitespace-nowrap md:whitespace-normal text-left px-4 py-3 rounded-lg transition-colors flex items-center justify-between"
                                 :class="step === (index + 1) ? 'bg-primary text-white font-medium shadow-md' : 'text-muted hover:bg-secondary hover:text-white'"
                             >
                                 <span x-text="s"></span>
@@ -30,7 +30,7 @@
                     </div>
 
                     <!-- Main Form Area -->
-                    <div class="flex-1 p-6 md:p-10 relative">
+                    <div class="flex-1 p-4 sm:p-6 md:p-10 pb-32 lg:pb-10 relative">
                         <form action="{{ route('upload.store') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
                             @csrf
                             
@@ -92,7 +92,7 @@
                                             <p class="text-primary text-xs mt-1">{{ $errors->first('title') }}</p>
                                         @endif
                                     </div>
-                                    <div class="grid grid-cols-2 gap-4">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
                                             <x-input-label for="category" value="Category" />
                                             <select name="category_id" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50">
@@ -151,7 +151,7 @@
 
                                 <template id="audio-track-template">
                                     <div class="audio-track-row border border-border p-4 rounded-lg bg-secondary/30">
-                                        <div class="grid grid-cols-2 gap-4">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div>
                                                 <x-input-label value="Audio Language" />
                                                 <select name="audio_language[0]" class="audio-language mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
@@ -181,7 +181,7 @@
                                 <h3 class="text-xl font-bold text-white mb-6">Subtitles</h3>
                                 <div class="space-y-4">
                                     <div class="border border-border p-4 rounded-lg bg-secondary/30">
-                                        <div class="grid grid-cols-2 gap-4">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div>
                                                 <x-input-label value="Subtitle Language" />
                                                 <select name="subtitle_language[]" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
@@ -251,18 +251,18 @@
                                 </div>
                             </div>
 
-                            <!-- Action Buttons -->
-                            <div class="absolute bottom-6 right-6 left-6 md:left-10 flex justify-between border-t border-border pt-4 mt-8 bg-card">
-                                <button type="button" @click="step--" x-show="step > 1" class="px-6 py-2 rounded-lg border border-border text-white hover:bg-secondary transition-colors">
+                            <!-- Action Buttons (fixed bottom bar on mobile/tablet, static on desktop) -->
+                            <div class="fixed bottom-24 inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur-md px-4 py-3 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 sm:justify-between lg:static lg:mt-8 lg:border-t lg:bg-transparent lg:backdrop-blur-none lg:px-0 lg:py-0 lg:pt-4">
+                                <button type="button" @click="step--" x-show="step > 1" class="px-6 py-3 rounded-lg border border-border text-white hover:bg-secondary transition-colors w-full sm:w-auto">
                                     Back
                                 </button>
                                 <div x-show="step === 1" class="hidden md:block"></div>
                                 
-                                <button type="button" @click="step++" x-show="step < 7" class="px-6 py-2 rounded-lg bg-white text-black font-bold hover:bg-gray-200 transition-colors">
+                                <button type="button" @click="step++" x-show="step < 7" class="px-6 py-3 rounded-lg bg-white text-black font-bold hover:bg-gray-200 transition-colors w-full sm:w-auto">
                                     Next Step
                                 </button>
                                 
-                                <button type="button" @click.prevent="submitForm()" x-show="step === 7" class="px-6 py-2 rounded-lg bg-primary text-white font-bold hover:bg-red-600 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                                <button type="button" @click.prevent="submitForm()" x-show="step === 7" class="px-6 py-3 rounded-lg bg-primary text-white font-bold hover:bg-red-600 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.5)] w-full sm:w-auto">
                                     Publish Video
                                 </button>
                             </div>

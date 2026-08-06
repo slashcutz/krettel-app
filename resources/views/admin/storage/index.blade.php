@@ -3,11 +3,11 @@
 
     <div class="max-w-4xl">
         <div class="bg-card border border-border rounded-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-border">
+            <div class="px-4 sm:px-6 py-4 border-b border-border">
                 <h2 class="text-lg font-bold text-white">Default Storage Provider</h2>
             </div>
             
-            <div class="p-6">
+            <div class="p-4 sm:p-6">
                 <form action="{{ route('admin.storage.store') }}" method="POST" class="space-y-6">
                     @csrf
                     <div>
@@ -45,8 +45,8 @@
                         </div>
                     </div>
 
-                    <div class="flex justify-end pt-4">
-                        <button type="submit" class="bg-primary hover:bg-red-600 text-white px-6 py-2 rounded-lg transition-colors font-bold">Save Configuration</button>
+                    <div class="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end pt-4">
+                        <button type="submit" class="bg-primary hover:bg-red-600 text-white px-6 py-2.5 rounded-lg transition-colors font-bold w-full sm:w-auto">Save Configuration</button>
                     </div>
                 </form>
             </div>

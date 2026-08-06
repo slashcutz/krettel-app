@@ -34,6 +34,13 @@ class WarmTeraBoxImages extends Command
             }
         }
 
+        foreach (['navbar_logo'] as $key) {
+            $value = \App\Models\Setting::get($key);
+            if (is_string($value) && str_starts_with($value, 'terabox://')) {
+                $resources[] = ['settings', $key, substr($value, 9)];
+            }
+        }
+
         $this->info('Found ' . count($resources) . ' references to warm.');
 
         $seen = [];

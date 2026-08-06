@@ -9,6 +9,7 @@ use App\Models\Collection;
 use App\Models\CollectionItem;
 use App\Models\User;
 use App\Models\Video;
+use App\Support\TeraBoxImageStore;
 
 class CollectionController extends Controller
 {
@@ -49,12 +50,14 @@ class CollectionController extends Controller
             'video_ids.*' => 'exists:videos,id',
         ]);
 
+        $imageData = $this->storeImage($request);
+
         $collection = Collection::create([
             'name' => $request->input('name'),
             'slug' => $request->input('slug'),
             'description' => $request->input('description'),
-            'image' => $this->storeImage($request),
-            'terabox_image' => $request->input('terabox_image'),
+            'image' => $imageData['image'],
+            'terabox_image' => $imageData['terabox_image'] ?: $request->input('terabox_image'),
             'user_id' => $request->input('user_id') ?? auth()->id(),
             'visibility' => $request->input('visibility'),
         ]);
@@ -65,13 +68,22 @@ class CollectionController extends Controller
             ->with('success', 'Collection created successfully.');
     }
 
-    protected function storeImage(Request $request): ?string
+    protected function storeImage(Request $request): array
     {
-        if ($request->hasFile('image')) {
-            return $request->file('image')->store('collections', 'public');
+        if (! $request->hasFile('image')) {
+            return ['image' => null, 'terabox_image' => null];
         }
 
-        return null;
+        $file = $request->file('image');
+        $local = $file->store('collections', 'public');
+
+        $ref = TeraBoxImageStore::upload(
+            $file,
+            TeraBoxImageStore::remoteDir('Collections'),
+            'collection-' . Str::slug($request->input('name', 'image')) . '-' . uniqid() . '.' . $file->getClientOriginalExtension()
+        );
+
+        return ['image' => $local, 'terabox_image' => $ref];
     }
 
     protected function syncItems(Collection $collection, array $videoIds): void
@@ -131,7 +143,9 @@ class CollectionController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $data['image'] = $this->storeImage($request);
+            $imageData = $this->storeImage($request);
+            $data['image'] = $imageData['image'];
+            $data['terabox_image'] = $imageData['terabox_image'] ?: $request->input('terabox_image');
         }
 
         $collection->update($data);

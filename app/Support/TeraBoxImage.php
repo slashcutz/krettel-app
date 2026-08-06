@@ -14,7 +14,7 @@ class TeraBoxImage
      * - http(s) URLs: used as-is.
      * - plain local paths: /storage/…
      */
-    public static function url(?string $value, string $model, ?int $id): ?string
+    public static function url(?string $value, string $model, string|int|null $id): ?string
     {
         if (! is_string($value) || trim($value) === '') {
             return null;

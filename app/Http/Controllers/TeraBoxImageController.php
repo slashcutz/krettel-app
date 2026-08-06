@@ -19,14 +19,18 @@ class TeraBoxImageController extends Controller
      * 30 days) and downscaled once via GD so card images load instantly instead
      * of round-tripping TeraBox on every page view.
      */
-    public function show(string $model, int $id)
+    public function show(string $model, string $id)
     {
-        $resource = $model === 'collection' ? Collection::find($id) : Video::find($id);
-        abort_unless($resource, 404);
-
-        $value = $model === 'collection'
-            ? ($resource->terabox_image ?: $resource->image)
-            : ($resource->terabox_image ?: $resource->poster ?: $resource->thumbnail);
+        $value = match ($model) {
+            'collection' => ($resource = Collection::find((int) $id))
+                ? ($resource->terabox_image ?: $resource->image)
+                : null,
+            'video' => ($resource = Video::find((int) $id))
+                ? ($resource->terabox_image ?: $resource->poster ?: $resource->thumbnail)
+                : null,
+            'settings' => \App\Models\Setting::get($id),
+            default => null,
+        };
 
         abort_unless(is_string($value) && str_starts_with($value, 'terabox://'), 404);
 
@@ -51,7 +55,7 @@ class TeraBoxImageController extends Controller
      * Cache keys are derived from the remote path so changing the stored image
      * automatically busts every layer without manual cache clearing.
      */
-    public static function load(string $model, int $id, string $remotePath): array
+    public static function load(string $model, string|int $id, string $remotePath): array
     {
         $key = 'terabox_img_bytes_' . md5($remotePath);
 
@@ -97,7 +101,7 @@ class TeraBoxImageController extends Controller
     /**
      * Write the optimized bytes as a static file served via /storage (no PHP).
      */
-    protected static function ensureLocal(string $model, int $id, string $remotePath, string $body, string $type): void
+    protected static function ensureLocal(string $model, string|int $id, string $remotePath, string $body, string $type): void
     {
         $ext = str_contains($type, 'png') ? 'png' : 'jpg';
         $file = static::localFile($remotePath, $ext);
@@ -114,7 +118,7 @@ class TeraBoxImageController extends Controller
     /**
      * Public URL of the static copy, or null when not yet warmed.
      */
-    public static function localUrl(string $model, int $id, ?string $value): ?string
+    public static function localUrl(string $model, string|int $id, ?string $value): ?string
     {
         if (! is_string($value) || ! str_starts_with($value, 'terabox://')) {
             return null;
@@ -181,7 +185,7 @@ class TeraBoxImageController extends Controller
     /**
      * Pre-fetch + cache an image reference (used by `images:warm`).
      */
-    public static function warm(string $model, int $id, string $remotePath, bool $force = false): void
+    public static function warm(string $model, string|int $id, string $remotePath, bool $force = false): void
     {
         if ($force) {
             Cache::store('file')->forget('terabox_img_bytes_' . md5($remotePath));

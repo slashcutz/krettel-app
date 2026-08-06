@@ -2,11 +2,11 @@
     <x-slot name="header">Create Banner</x-slot>
 
     <div class="max-w-4xl bg-card border border-border rounded-xl overflow-hidden">
-        <div class="px-6 py-4 border-b border-border">
+        <div class="px-4 sm:px-6 py-4 border-b border-border">
             <h2 class="text-lg font-bold text-white">Banner Details</h2>
         </div>
 
-        <form action="{{ route('admin.banners.store') }}" method="POST" class="p-6">
+        <form action="{{ route('admin.banners.store') }}" method="POST" class="p-4 sm:p-6">
             @csrf
 
             <div class="space-y-6">
@@ -57,9 +57,9 @@
                 </div>
             </div>
 
-            <div class="mt-8 pt-6 border-t border-border flex justify-end space-x-4">
-                <a href="{{ route('admin.banners.index') }}" class="px-4 py-2 border border-border rounded-lg text-white hover:bg-secondary transition-colors">Cancel</a>
-                <button type="submit" class="bg-primary hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors font-medium">Create Banner</button>
+            <div class="mt-8 pt-6 border-t border-border flex flex-col-reverse sm:flex-row gap-3 sm:justify-end sm:space-x-4">
+                <a href="{{ route('admin.banners.index') }}" class="px-4 py-2.5 border border-border rounded-lg text-white hover:bg-secondary transition-colors text-center w-full sm:w-auto">Cancel</a>
+                <button type="submit" class="bg-primary hover:bg-red-600 text-white px-4 py-2.5 rounded-lg transition-colors font-medium w-full sm:w-auto">Create Banner</button>
             </div>
         </form>
     </div>

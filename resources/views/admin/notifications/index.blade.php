@@ -10,7 +10,7 @@
             </form>
         </div>
         
-        <div class="overflow-x-auto">
+        <div class="hidden md:block overflow-x-auto">
             <table class="w-full text-left text-sm text-muted">
                 <thead class="text-xs uppercase bg-secondary/50 text-muted">
                     <tr>
@@ -36,6 +36,27 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+
+        <!-- Mobile Card List -->
+        <div class="md:hidden divide-y divide-border">
+            @forelse($notifications as $notification)
+            <div class="p-4">
+                <div class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-primary flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white">{{ $notification->description }}</p>
+                        <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span class="text-xs text-muted">{{ $notification->user->name ?? 'System' }}</span>
+                            <span class="text-xs text-muted">&middot;</span>
+                            <span class="text-xs text-muted">{{ $notification->created_at->format('M d, Y H:i') }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @empty
+                <p class="px-4 py-8 text-center text-sm text-muted">No system notifications found.</p>
+            @endforelse
         </div>
         
         <div class="px-6 py-4 border-t border-border">
