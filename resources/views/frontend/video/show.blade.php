@@ -104,6 +104,11 @@
 
                         // Track error state
                         this.$refs.video.addEventListener('error', () => {
+                            if (!this.isDirectStream && "{{ $video->video_url }}" === 'terabox-remote') {
+                                console.log('[PLAYER] Video load error, falling back to direct stream...');
+                                this.toggleSourceQuality('original');
+                                return;
+                            }
                             this.videoError = 'This video could not be loaded. It may still be processing or the file is not available.';
                             this.isPlaying = false;
                         });
@@ -188,6 +193,15 @@
                             });
                             hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, (e, data) => {
                                 this.audioTrack = data.id;
+                            });
+                            hls.on(Hls.Events.ERROR, (event, data) => {
+                                if (data.fatal) {
+                                    console.log('[HLS] Fatal error:', data.type);
+                                    if (!this.isDirectStream && "{{ $video->video_url }}" === 'terabox-remote') {
+                                        console.log('[PLAYER] HLS fatal error, falling back to direct stream...');
+                                        this.toggleSourceQuality('original');
+                                    }
+                                }
                             });
                         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                             // Native HLS (Safari / iOS)
