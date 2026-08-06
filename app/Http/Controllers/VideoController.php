@@ -362,10 +362,18 @@ class VideoController extends Controller
                 }
                 @ini_set('zlib.output_compression', 'Off');
                 @ob_implicit_flush(true);
-                @ob_end_clean();
+                
+                // Clear any existing output buffers
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
 
-                while (!feof($stream) && connection_status() == 0) {
-                    echo fread($stream, 1024 * 128); // Read in 128KB chunks
+                // Stream in 256KB chunks for faster buffering
+                while (!feof($stream)) {
+                    if (connection_aborted()) {
+                        break;
+                    }
+                    echo fread($stream, 262144); // 256KB
                     flush();
                 }
                 fclose($stream);
