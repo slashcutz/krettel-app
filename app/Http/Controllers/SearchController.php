@@ -73,7 +73,7 @@ class SearchController extends Controller
 
         $videos = $videos->paginate(20)->withQueryString();
 
-        $categories = VideoCategory::where('status', true)->orderBy('sort_order')->orderBy('name')->get();
+        $categories = VideoCategory::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
         $genres = Genre::where('status', true)->orderBy('name')->get();
         $languages = Language::where('status', true)->orderBy('name')->get();
         $resolutions = Video::where('visibility', 'public')->whereNotNull('resolution')->where('resolution', '!=', '')->distinct()->orderBy('resolution')->pluck('resolution')->values();
@@ -111,7 +111,7 @@ class SearchController extends Controller
             })
             ->values();
 
-        $categories = VideoCategory::where('status', true)
+        $categories = VideoCategory::where('is_active', true)
             ->where('name', 'like', "%{$q}%")
             ->take(5)
             ->get(['id', 'name', 'slug', 'icon']);
