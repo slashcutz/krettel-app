@@ -111,11 +111,21 @@ class VideoController extends Controller
 
         // Handle TeraBox Remote path mapping
         if (!empty($updateData['storage_folder'])) {
-            $remotePrefix = config('terabox.remote_dir', '/Apps/Krettel');
+            $remotePrefix = rtrim(config('terabox.remote_dir', '/Apps/Krettel'), '/');
             $path = trim($updateData['storage_folder']);
-            if (!str_starts_with($path, '/')) {
-                $path = rtrim($remotePrefix, '/') . '/' . $path;
+
+            // If it's a share link (URL), leave it as-is
+            if (!str_starts_with($path, 'http://') && !str_starts_with($path, 'https://')) {
+                // Normalise: ensure leading slash
+                if (!str_starts_with($path, '/')) {
+                    $path = '/' . $path;
+                }
+                // Only prepend the remote prefix if it's not already present
+                if (!str_starts_with($path, $remotePrefix . '/') && !str_starts_with($path, $remotePrefix . '\\')) {
+                    $path = $remotePrefix . '/' . ltrim($path, '/');
+                }
             }
+
             $updateData['storage_folder'] = $path;
             $updateData['video_url'] = 'terabox-remote';
         }
