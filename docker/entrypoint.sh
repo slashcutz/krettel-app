@@ -10,6 +10,14 @@ cd /var/www/html
 mkdir -p storage/app/public/hls storage/app/private/pending-uploads
 mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs
 
+# SQLite: ensure the DB file exists on the persistent disk before migrating.
+# Render has no managed MySQL, so the app runs on SQLite stored under /storage.
+if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ]; then
+    DB_FILE="${DB_DATABASE:-/var/www/html/storage/database.sqlite}"
+    mkdir -p "$(dirname "$DB_FILE")"
+    touch "$DB_FILE"
+fi
+
 rm -rf public/storage
 php artisan storage:link
 

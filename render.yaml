@@ -6,9 +6,9 @@
 # Before deploying:
 #   1. Connect this GitHub repo (slashcutz/krettel-app) to Render via the
 #      Render Dashboard -> New -> Blueprint, or "New Web Service" -> "Docker".
-#   2. Render has no managed MySQL — set DB_HOST / DB_PORT / DB_DATABASE /
-#      DB_USERNAME / DB_PASSWORD to an external MySQL instance (these env vars
-#      are marked `sync: false`; fill them in the Render dashboard).
+#   2. Render has no managed MySQL — the app runs on SQLite stored on the
+#      persistent disk (/var/www/html/storage/database.sqlite). No database
+#      env vars are needed.
 #   3. Set APP_URL to your app's *.onrender.com (or custom domain) URL.
 #   4. Set the TERABOX_* credentials (same as your local .env).
 #   5. Recommend the `standard` plan (or higher) when you need in-container
@@ -48,19 +48,11 @@ services:
         value: database
       - key: QUEUE_CONNECTION
         value: database
-      # External MySQL (Render does not manage MySQL)
+      # SQLite on the persistent disk (Render has no managed MySQL).
       - key: DB_CONNECTION
-        value: mysql
-      - key: DB_HOST
-        sync: false
-      - key: DB_PORT
-        value: "3306"
+        value: sqlite
       - key: DB_DATABASE
-        sync: false
-      - key: DB_USERNAME
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
+        value: /var/www/html/storage/database.sqlite
       # TeraBox (keep in sync with your local .env)
       - key: TERABOX_EMAIL
         sync: false
