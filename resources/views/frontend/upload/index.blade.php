@@ -80,9 +80,15 @@
                                         </div>
                                         <div>
                                             <x-input-label for="previews" value="Preview Images (optional, shown randomly on cards)" />
-                                            <input type="text" name="previews[]" class="block mt-1 w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 mb-2" placeholder="Preview 1 URL">
-                                            <input type="text" name="previews[]" class="block mt-1 w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 mb-2" placeholder="Preview 2 URL">
-                                            <input type="text" name="previews[]" class="block mt-1 w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50" placeholder="Preview 3 URL">
+                                            <div class="space-y-4 mt-2">
+                                                @for($i = 0; $i < 3; $i++)
+                                                    <div class="p-3 bg-zinc-950/40 rounded-xl border border-zinc-800/80">
+                                                        <span class="text-[10px] text-gray-500 font-bold mb-1.5 block">Preview #{{ $i + 1 }}</span>
+                                                        <input type="text" name="previews[]" class="block w-full rounded-md border-border bg-secondary text-white focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50 text-xs mb-2 p-2" placeholder="Preview {{ $i + 1 }} URL">
+                                                        <input type="file" name="preview_files[]" accept="image/*" class="text-xs text-gray-400 file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-primary file:text-white hover:file:bg-red-600 block w-full cursor-pointer">
+                                                    </div>
+                                                @endfor
+                                            </div>
                                         </div>
                                     </div>
                                     <div>

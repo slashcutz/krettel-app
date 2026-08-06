@@ -67,36 +67,101 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                    <div>
-                        <label for="thumbnail" class="block text-sm font-medium text-white mb-2">Thumbnail URL / File</label>
-                        <input type="url" name="thumbnail" id="thumbnail" value="{{ old('thumbnail', $video->thumbnail) }}" placeholder="Paste Image URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 mb-2">
-                        <input type="file" name="thumbnail_file" id="thumbnail_file" accept="image/*" class="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:bg-red-600 block w-full cursor-pointer">
+                <!-- Media URLs & Files with Live Previews -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6" 
+                     x-data="{
+                         thumbPreview: '{{ $video->thumbnail }}',
+                         posterPreview: '{{ $video->poster }}',
+                         triggerClick(id) { document.getElementById(id).click() },
+                         onFileChange(e, key) {
+                             const file = e.target.files[0];
+                             if (file) {
+                                 this[key] = URL.createObjectURL(file);
+                             }
+                         }
+                     }">
+                    
+                    <!-- Thumbnail File & URL -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-white">Thumbnail</label>
+                        <div @click="triggerClick('thumbnail_file')" class="relative border-2 border-dashed border-border rounded-xl aspect-video overflow-hidden bg-secondary/50 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary transition group">
+                            <template x-if="thumbPreview">
+                                <img :src="thumbPreview" class="absolute inset-0 w-full h-full object-cover">
+                            </template>
+                            <div class="relative z-10 p-4 bg-black/60 rounded-xl m-2 text-center group-hover:bg-primary/90 transition-colors">
+                                <p class="text-xs font-bold text-white">Choose / Upload Image</p>
+                                <p class="text-[10px] text-gray-300 mt-0.5">Click to browse file</p>
+                            </div>
+                            <input type="file" name="thumbnail_file" id="thumbnail_file" accept="image/*" @change="onFileChange($event, 'thumbPreview')" class="hidden">
+                        </div>
+                        <input type="url" name="thumbnail" x-model="thumbPreview" placeholder="Or paste image URL" class="bg-secondary border border-border text-white text-xs rounded-lg focus:ring-primary focus:border-primary block w-full p-2">
                     </div>
-                    <div>
-                        <label for="poster" class="block text-sm font-medium text-white mb-2">Poster URL / File</label>
-                        <input type="url" name="poster" id="poster" value="{{ old('poster', $video->poster) }}" placeholder="Paste Image URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 mb-2">
-                        <input type="file" name="poster_file" id="poster_file" accept="image/*" class="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:bg-red-600 block w-full cursor-pointer">
+
+                    <!-- Poster File & URL -->
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-white">Poster</label>
+                        <div @click="triggerClick('poster_file')" class="relative border-2 border-dashed border-border rounded-xl aspect-[2/3] overflow-hidden bg-secondary/50 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary transition group" style="max-height: 240px;">
+                            <template x-if="posterPreview">
+                                <img :src="posterPreview" class="absolute inset-0 w-full h-full object-cover">
+                            </template>
+                            <div class="relative z-10 p-4 bg-black/60 rounded-xl m-2 text-center group-hover:bg-primary/90 transition-colors">
+                                <p class="text-xs font-bold text-white">Choose / Upload Image</p>
+                                <p class="text-[10px] text-gray-300 mt-0.5">Click to browse file</p>
+                            </div>
+                            <input type="file" name="poster_file" id="poster_file" accept="image/*" @change="onFileChange($event, 'posterPreview')" class="hidden">
+                        </div>
+                        <input type="url" name="poster" x-model="posterPreview" placeholder="Or paste image URL" class="bg-secondary border border-border text-white text-xs rounded-lg focus:ring-primary focus:border-primary block w-full p-2">
                     </div>
-                    <div>
-                        <label for="trailer_url" class="block text-sm font-medium text-white mb-2">Trailer URL</label>
-                        <input type="url" name="trailer_url" id="trailer_url" value="{{ old('trailer_url', $video->trailer_url) }}" placeholder="Paste Trailer URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+
+                    <!-- Trailer & TeraBox Image URL -->
+                    <div class="space-y-4 flex flex-col justify-between">
+                        <div>
+                            <label for="trailer_url" class="block text-sm font-medium text-white mb-2">Trailer URL</label>
+                            <input type="url" name="trailer_url" id="trailer_url" value="{{ old('trailer_url', $video->trailer_url) }}" placeholder="Paste Trailer URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                        </div>
+                        <div>
+                            <label for="terabox_image" class="block text-sm font-medium text-white mb-2">TeraBox Image URL</label>
+                            <input type="text" name="terabox_image" id="terabox_image" value="{{ old('terabox_image', $video->terabox_image) }}" placeholder="https://... or terabox://remote/path" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                            <p class="text-[10px] text-muted mt-1.5">Image hosted on TeraBox. Paste direct link or <code>terabox://</code> path.</p>
+                        </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                    <div>
-                        <label for="terabox_image" class="block text-sm font-medium text-white mb-2">TeraBox Image URL</label>
-                        <input type="text" name="terabox_image" id="terabox_image" value="{{ old('terabox_image', $video->terabox_image) }}" placeholder="https://... or terabox://remote/path" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
-                        <p class="text-xs text-muted mt-1.5">Image hosted on TeraBox. Paste a direct link or a <code>terabox://</code> path.</p>
-                    </div>
-                    <div>
-                        <label for="previews" class="block text-sm font-medium text-white mb-2">Preview Images (random per card)</label>
+                <!-- Previews with Live Individual Previews -->
+                <div class="border-t border-border pt-6"
+                     x-data="{
+                         previews: [
+                             '{{ $video->previews[0] ?? '' }}',
+                             '{{ $video->previews[1] ?? '' }}',
+                             '{{ $video->previews[2] ?? '' }}'
+                         ],
+                         triggerClick(idx) { document.getElementById('preview_file_' + idx).click() },
+                         onPreviewChange(e, idx) {
+                             const file = e.target.files[0];
+                             if (file) {
+                                 this.previews[idx] = URL.createObjectURL(file);
+                             }
+                         }
+                     }">
+                    <label class="block text-sm font-medium text-white mb-3">Preview Images (random per card)</label>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         @for($i = 0; $i < 3; $i++)
-                            <input type="text" name="previews[]" value="{{ old('previews.'.$i, $video->previews[$i] ?? '') }}" placeholder="Preview {{ $i + 1 }} URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5 mb-2">
+                            <div class="space-y-2 p-3 bg-zinc-950/40 rounded-xl border border-zinc-800/80">
+                                <span class="text-[11px] text-gray-500 font-bold block">Preview #{{ $i + 1 }}</span>
+                                <div @click="triggerClick({{ $i }})" class="relative border border-dashed border-border rounded-lg aspect-video overflow-hidden bg-secondary/30 flex items-center justify-center text-center cursor-pointer hover:border-primary transition group">
+                                    <template x-if="previews[{{ $i }}]">
+                                        <img :src="previews[{{ $i }}]" class="absolute inset-0 w-full h-full object-cover">
+                                    </template>
+                                    <div class="relative z-10 p-2 bg-black/60 rounded-md m-1 text-center group-hover:bg-primary/90 transition-colors">
+                                        <span class="text-[10px] font-bold text-white">Upload</span>
+                                    </div>
+                                    <input type="file" name="preview_files[]" id="preview_file_{{ $i }}" accept="image/*" @change="onPreviewChange($event, {{ $i }})" class="hidden">
+                                </div>
+                                <input type="text" name="previews[]" x-model="previews[{{ $i }}]" placeholder="Or paste preview URL" class="bg-secondary border border-border text-white text-[11px] rounded-lg focus:ring-primary focus:border-primary block w-full p-2">
+                            </div>
                         @endfor
-                        <p class="text-xs text-muted mt-1.5">Optional. Cards show a random one of these on each load.</p>
                     </div>
+                    <p class="text-xs text-muted mt-2">Optional. Cards show a random one of these on each load.</p>
                 </div>
 
                 <div>

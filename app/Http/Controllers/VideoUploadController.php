@@ -41,6 +41,8 @@ class VideoUploadController extends Controller
             'terabox_image' => 'nullable|string|max:500',
             'previews' => 'nullable|array',
             'previews.*' => 'nullable|string|max:500',
+            'preview_files' => 'nullable|array',
+            'preview_files.*' => 'nullable|image|max:5120',
         ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::channel('krettel')->error('[UPLOAD] Validation failed.', ['errors' => $e->errors()]);
@@ -106,6 +108,20 @@ class VideoUploadController extends Controller
             ]);
         }
 
+        $previews = collect($request->input('previews', []))
+            ->filter(fn ($url) => is_string($url) && trim($url) !== '')
+            ->values()
+            ->all() ?: [];
+
+        if ($request->hasFile('preview_files')) {
+            foreach ($request->file('preview_files') as $file) {
+                if ($file) {
+                    $path = $file->store('previews', 'public');
+                    $previews[] = asset('storage/' . $path);
+                }
+            }
+        }
+
         $video = Video::create([
             'title' => $request->input('title'),
             'slug' => $slug,
@@ -120,10 +136,7 @@ class VideoUploadController extends Controller
             'video_url' => $videoPath ?? 'pending-upload',
             'thumbnail' => $thumbnailPath,
             'terabox_image' => $teraboxImage,
-            'previews' => collect($request->input('previews', []))
-                ->filter(fn ($url) => is_string($url) && trim($url) !== '')
-                ->values()
-                ->all() ?: null,
+            'previews' => !empty($previews) ? $previews : null,
             'resolution' => $request->input('resolution', '1080p'),
         ]);
 

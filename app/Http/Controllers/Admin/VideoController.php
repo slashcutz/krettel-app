@@ -79,6 +79,8 @@ class VideoController extends Controller
             'terabox_image' => 'nullable|string|max:500',
             'previews' => 'nullable|array',
             'previews.*' => 'nullable|string|max:500',
+            'preview_files' => 'nullable|array',
+            'preview_files.*' => 'nullable|image|max:5120',
         ]);
 
         $updateData = $request->only([
@@ -99,10 +101,21 @@ class VideoController extends Controller
 
         $video->update($updateData);
 
-        $video->previews = collect($request->input('previews', []))
+        $previews = collect($request->input('previews', []))
             ->filter(fn ($url) => is_string($url) && trim($url) !== '')
             ->values()
-            ->all();
+            ->all() ?: [];
+
+        if ($request->hasFile('preview_files')) {
+            foreach ($request->file('preview_files') as $file) {
+                if ($file) {
+                    $path = $file->store('previews', 'public');
+                    $previews[] = asset('storage/' . $path);
+                }
+            }
+        }
+
+        $video->previews = !empty($previews) ? $previews : null;
         $video->save();
 
         return redirect()->route('admin.videos.index')
