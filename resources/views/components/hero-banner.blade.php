@@ -20,8 +20,8 @@
     }
 @endphp
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 md:pt-32">
-    <section class="relative w-full rounded-3xl overflow-hidden bg-zinc-900 flex flex-col justify-end p-6 md:p-10 border border-zinc-800/60 shadow-2xl group" style="aspect-ratio: 16/9;">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 md:pt-28">
+    <section class="relative w-full rounded-3xl overflow-hidden bg-zinc-900 flex flex-col justify-end p-6 md:p-10 border border-zinc-800/60 shadow-2xl group min-h-[300px] max-h-[420px]" style="aspect-ratio: 16/9; max-height: 420px;">
         <!-- Hero Background Image -->
         <img src="{{ $image }}" alt="Hero Background" loading="eager" fetchpriority="high" decoding="sync" class="absolute inset-0 w-full h-full object-cover z-0">
         
