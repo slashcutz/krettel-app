@@ -296,4 +296,98 @@ class VideoController extends Controller
             abort(502, 'Failed: ' . $e->getMessage() . ' (DB NDUS: ' . substr($dbNdus, 0, 10) . '..., Config NDUS: ' . substr($configNdus, 0, 10) . '...)');
         }
     }
+
+    /**
+     * Diagnostic endpoint to test TeraBox connectivity from the server.
+     */
+    public function teraboxTest()
+    {
+        $results = [];
+
+        // 1. Show what credentials we have
+        $dbNdus = \App\Models\Setting::get('terabox_ndus');
+        $configNdus = config('terabox.ndus');
+        $dbEmail = \App\Models\Setting::get('terabox_email');
+        $configEmail = config('terabox.email');
+        $dbPassword = \App\Models\Setting::get('terabox_password');
+        $configPassword = config('terabox.password');
+        $webHost = config('terabox.web_host', 'https://www.terabox.com');
+
+        $results['credentials'] = [
+            'db_ndus' => $dbNdus ? substr($dbNdus, 0, 10) . '... (' . strlen($dbNdus) . ' chars)' : 'NOT SET',
+            'config_ndus' => $configNdus ? substr($configNdus, 0, 10) . '... (' . strlen($configNdus) . ' chars)' : 'NOT SET',
+            'db_email' => $dbEmail ? substr($dbEmail, 0, 5) . '...' : 'NOT SET',
+            'config_email' => $configEmail ? substr($configEmail, 0, 5) . '...' : 'NOT SET',
+            'has_db_password' => !empty($dbPassword),
+            'has_config_password' => !empty($configPassword),
+            'web_host' => $webHost,
+        ];
+
+        // 2. Test ensureAuthenticated
+        $terabox = app(TeraBoxClient::class);
+        try {
+            $terabox->ensureAuthenticated();
+            $results['auth'] = ['status' => 'SUCCESS', 'authed' => $terabox->isAuthed()];
+        } catch (\Throwable $e) {
+            $results['auth'] = ['status' => 'FAILED', 'error' => $e->getMessage()];
+        }
+
+        // 3. Test getDirectLink for video 3
+        $video = \App\Models\Video::find(3);
+        if ($video) {
+            try {
+                $terabox2 = app(TeraBoxClient::class);
+                $dlink = $terabox2->getDirectLink($video->storage_folder);
+                $results['direct_link'] = ['status' => 'SUCCESS', 'dlink' => substr($dlink, 0, 80) . '...'];
+            } catch (\Throwable $e) {
+                $results['direct_link'] = ['status' => 'FAILED', 'error' => $e->getMessage(), 'path' => $video->storage_folder];
+            }
+        }
+
+        // 4. Test raw HTTP to TeraBox main page
+        try {
+            $client = new \GuzzleHttp\Client(['timeout' => 10]);
+            $resp = $client->request('GET', 'https://www.1024terabox.com/', [
+                'headers' => ['User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'],
+            ]);
+            $results['terabox_reachable'] = [
+                'status' => 'OK',
+                'http_code' => $resp->getStatusCode(),
+                'body_length' => strlen((string) $resp->getBody()),
+            ];
+        } catch (\Throwable $e) {
+            $results['terabox_reachable'] = ['status' => 'FAILED', 'error' => $e->getMessage()];
+        }
+
+        // 5. Test share/list API (public, no cookies)
+        try {
+            $client = new \GuzzleHttp\Client(['timeout' => 10]);
+            $resp = $client->request('GET', 'https://www.1024terabox.com/share/list?app_id=250528&web=1&channel=dubox&clienttype=0&page=1&num=20&by=name&order=asc&surl=test123&root=1', [
+                'headers' => [
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Referer' => 'https://www.1024terabox.com/',
+                ],
+            ]);
+            $shareJson = json_decode((string) $resp->getBody(), true);
+            $results['share_api'] = [
+                'status' => 'API_REACHABLE',
+                'http_code' => $resp->getStatusCode(),
+                'api_errno' => $shareJson['errno'] ?? 'unknown',
+                'note' => 'errno 2 = invalid surl (expected for test), API is working',
+            ];
+        } catch (\Throwable $e) {
+            $results['share_api'] = ['status' => 'FAILED', 'error' => $e->getMessage()];
+        }
+
+        // 6. Server IP
+        try {
+            $client = new \GuzzleHttp\Client(['timeout' => 5]);
+            $resp = $client->request('GET', 'https://api.ipify.org?format=json');
+            $results['server_ip'] = json_decode((string) $resp->getBody(), true);
+        } catch (\Throwable $e) {
+            $results['server_ip'] = ['error' => $e->getMessage()];
+        }
+
+        return response()->json($results, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
 }

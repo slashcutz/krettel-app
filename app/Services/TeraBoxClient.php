@@ -685,6 +685,8 @@ class TeraBoxClient
      */
     public function getDirectLink(string $remotePath): string
     {
+        $this->ensureAuthenticated();
+
         $json = $this->postForm(
             $this->whost . '/api/filemetas',
             [
