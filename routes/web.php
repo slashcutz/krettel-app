@@ -21,6 +21,7 @@ Route::get('/stream/pixeldrain/{video}/quality/{variant}', [VideoController::cla
 Route::get('/stream/pixeldrain/{video}/quality/{variant}/audio/{audioId}', [VideoController::class, 'streamPixeldrainVariantAudio'])->name('video.stream.pixeldrain.quality.audio');
 Route::get('/stream/720/{video}', [VideoController::class, 'stream720'])->name('video.stream.transcode');
 Route::get('/terabox-test', [VideoController::class, 'teraboxTest']);
+Route::get('/pixeldrain-test/{video}', [VideoController::class, 'pixeldrainTest']);
 Route::get('/stream/segment/{video}/{u}', [VideoController::class, 'segment'])->name('video.segment');
 Route::get('/stream/hls/{video}/{path}', [VideoController::class, 'hls'])->where('path', '.*')->name('video.hls');
 Route::get('/search', [SearchController::class, 'index'])->name('search.index');

@@ -1048,4 +1048,86 @@ class VideoController extends Controller
 
         return response()->json($results, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
+
+    /**
+     * Diagnostic endpoint to test Pixeldrain connectivity for a video from the server.
+     */
+    public function pixeldrainTest(Video $video)
+    {
+        $results = [];
+
+        // 1. Show database records
+        $results['video'] = [
+            'id' => $video->id,
+            'title' => $video->title,
+            'storage_provider' => $video->storage_provider,
+            'storage_folder' => $video->storage_folder,
+            'video_url' => $video->video_url,
+        ];
+
+        // 2. Show Pixeldrain API Key configuration
+        $client = app(\App\Services\PixeldrainClient::class);
+        $apiKey = $client->apiKey();
+        $results['config'] = [
+            'has_api_key' => !empty($apiKey),
+            'api_key_length' => $apiKey ? strlen($apiKey) : 0,
+            'base_url' => $client->baseUrl(),
+        ];
+
+        // 3. Test getFileInfo
+        if ($video->storage_provider === 'pixeldrain' && $video->storage_folder) {
+            try {
+                $info = $client->getFileInfo($video->storage_folder);
+                $results['file_info'] = [
+                    'status' => 'SUCCESS',
+                    'name' => $info['name'] ?? null,
+                    'size' => $info['size'] ?? null,
+                    'mime_type' => $info['mime_type'] ?? null,
+                    'can_download' => $info['can_download'] ?? null,
+                ];
+            } catch (\Throwable $e) {
+                $results['file_info'] = [
+                    'status' => 'FAILED',
+                    'error' => $e->getMessage(),
+                ];
+            }
+
+            // 4. Test Guzzle direct headers request (unauthenticated & authenticated)
+            try {
+                $url = $client->fileUrl($video->storage_folder);
+                $guzzleOpts = [
+                    'verify' => false,
+                    'headers' => [
+                        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept' => '*/*',
+                    ],
+                ];
+
+                $authHeader = $client->authHeader();
+                if ($authHeader) {
+                    if (preg_match('/^Authorization:\s*(.+)$/i', $authHeader, $m)) {
+                        $guzzleOpts['headers']['Authorization'] = $m[1];
+                    }
+                }
+
+                $http = new \GuzzleHttp\Client(['timeout' => 10]);
+                $resp = $http->request('HEAD', $url, $guzzleOpts);
+
+                $results['file_head_request'] = [
+                    'status' => 'SUCCESS',
+                    'http_code' => $resp->getStatusCode(),
+                    'headers' => $resp->getHeaders(),
+                ];
+            } catch (\Throwable $e) {
+                $results['file_head_request'] = [
+                    'status' => 'FAILED',
+                    'error' => $e->getMessage(),
+                ];
+            }
+        } else {
+            $results['pixeldrain_check'] = 'Skipped because storage_provider is not pixeldrain';
+        }
+
+        return response()->json($results, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
 }
