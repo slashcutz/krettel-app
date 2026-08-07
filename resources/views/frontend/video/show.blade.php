@@ -76,6 +76,7 @@
                     audioTracks: [],
                     audioTrack: -1,
                     isDirectStream: false,
+                    streamQuality: '480',
 
                     initPlayer() {
                         this.volume = this.$refs.video.volume;
@@ -144,13 +145,15 @@
                         this.bindKeyboardShortcuts();
                     },
 
-                    attachHls() {
+                    attachHls(src) {
                         const video = this.$refs.video;
                         if (!video) return;
-                        const source = video.querySelector('source');
-                        if (!source) return;
-                        const src = source.getAttribute('src');
-                        if (source.getAttribute('type') !== 'application/x-mpegURL') return;
+                        if (!src) {
+                            const source = video.querySelector('source');
+                            if (!source) return;
+                            if (source.getAttribute('type') !== 'application/x-mpegURL') return;
+                            src = source.getAttribute('src');
+                        }
                         if (!src) return;
 
                         if (window.Hls && Hls.isSupported()) {
@@ -314,14 +317,22 @@
                                 if (wasPlaying) this.$refs.video.play();
                             }, { once: true });
                         } else {
-                            if (!this.isDirectStream) return;
+                            if (!this.isDirectStream && this.streamQuality === type) return;
                             this.isDirectStream = false;
+                            this.streamQuality = type;
 
                             const currentTime = this.$refs.video.currentTime;
                             const wasPlaying = !this.$refs.video.paused;
 
-                            this.$refs.video.src = "{{ route('video.stream', $video->id) }}";
-                            this.attachHls();
+                            const src = "{{ route('video.stream', $video->id) }}" + '?q=' + type;
+
+                            if (this.hls) {
+                                this.hls.destroy();
+                                this.hls = null;
+                            }
+
+                            this.$refs.video.src = src;
+                            this.attachHls(src);
 
                             this.$refs.video.addEventListener('loadedmetadata', () => {
                                 this.$refs.video.currentTime = currentTime;
@@ -889,9 +900,13 @@
                                 </div>
                                  @if($video->video_url === 'terabox-remote')
                                      <!-- Quality Modes for TeraBox Remote -->
-                                     <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('auto')">
-                                         <span class="text-sm" :class="{ 'text-primary font-bold': !isDirectStream, 'text-gray-300': isDirectStream }">480p (Fast)</span>
-                                         <svg x-show="!isDirectStream" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                     <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('480')">
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': !isDirectStream && streamQuality === '480', 'text-gray-300': isDirectStream || streamQuality !== '480' }">480p (Fast)</span>
+                                         <svg x-show="!isDirectStream && streamQuality === '480'" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                     </div>
+                                     <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('720')">
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': !isDirectStream && streamQuality === '720', 'text-gray-300': isDirectStream || streamQuality !== '720' }">720p (Fast)</span>
+                                         <svg x-show="!isDirectStream && streamQuality === '720'" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                      </div>
                                      <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('original')">
                                          <span class="text-sm" :class="{ 'text-primary font-bold': isDirectStream, 'text-gray-300': !isDirectStream }">Original 1080p (Slow)</span>

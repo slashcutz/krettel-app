@@ -138,6 +138,10 @@ class VideoController extends Controller
     /**
      * Serve an HLS playlist for a TeraBox-hosted video.
      *
+     * Accepts an optional `?q=480|720` query to select the streaming quality.
+     * If the requested quality is not available (free accounts are capped at
+     * 480p), it silently falls back to 480p.
+     *
      * The TeraBox streaming endpoint requires a full session verification
      * (~2s of round-trips), so the rewritten playlist is cached for 30 minutes
      * and only refetched on expiry. Segment URLs are stable/reusable (verified
@@ -149,17 +153,42 @@ class VideoController extends Controller
             abort(404);
         }
 
-        $rewritten = Cache::remember('terabox_hls_' . $video->id, now()->addMinutes(30), function () use ($video) {
-            try {
-                $terabox = app(TeraBoxClient::class);
-                [, $playlist] = static::bestHlsPlaylist($terabox, $video);
-            } catch (\Throwable $e) {
-                Log::warning('[TERABOX-HLS] Failed to fetch playlist.', [
-                    'video_id' => $video->id,
-                    'error' => $e->getMessage(),
-                ]);
+        $quality = (string) request()->query('q', '480');
+        if (! in_array($quality, ['480', '720'], true)) {
+            $quality = '480';
+        }
 
-                abort(502, 'Stream unavailable. Please try again later.');
+        $rewritten = Cache::remember('terabox_hls_' . $video->id . '_' . $quality, now()->addMinutes(30), function () use ($video, $quality) {
+            $terabox = app(TeraBoxClient::class);
+
+            try {
+                $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_' . $quality);
+            } catch (\Throwable $e) {
+                if ($quality === '720') {
+                    // 720p not available (free tier cap) — degrade to 480p.
+                    Log::info('[TERABOX-HLS] 720p unavailable, falling back to 480p.', [
+                        'video_id' => $video->id,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    try {
+                        $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_480');
+                    } catch (\Throwable $fallback) {
+                        Log::warning('[TERABOX-HLS] Failed to fetch 480p playlist.', [
+                            'video_id' => $video->id,
+                            'error' => $fallback->getMessage(),
+                        ]);
+
+                        abort(502, 'Stream unavailable. Please try again later.');
+                    }
+                } else {
+                    Log::warning('[TERABOX-HLS] Failed to fetch playlist.', [
+                        'video_id' => $video->id,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    abort(502, 'Stream unavailable. Please try again later.');
+                }
             }
 
             // Pre-fetch the first segment so the player starts instantly from
@@ -219,58 +248,18 @@ class VideoController extends Controller
             return;
         }
 
-        try {
-            $terabox = app(TeraBoxClient::class);
-            [, $playlist] = static::bestHlsPlaylist($terabox, $video);
+        $terabox = app(TeraBoxClient::class);
 
-            Cache::put('terabox_hls_' . $video->id, static::rewritePlaylist($video, $playlist), now()->addMinutes(30));
-            static::warmFirstSegment($video, $terabox, $playlist);
-        } catch (\Throwable $e) {
-            Log::debug('[TERABOX-HLS] Pre-warm skipped for video ' . $video->id . ': ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Fetch the highest streaming quality the account can serve.
-     *
-     * TeraBox free accounts are capped at 720p on the streaming CDN, so we
-     * request 720p first and fall back to 480p when the account is denied it.
-     * The working quality is cached so later playlist requests skip the retry
-     * round-trip.
-     *
-     * @return array{0: string, 1: string} [stream type, playlist body]
-     */
-    protected static function bestHlsPlaylist(TeraBoxClient $terabox, Video $video): array
-    {
-        $preferred = Cache::get('terabox_hls_quality_' . $video->id);
-        $types = is_string($preferred) && $preferred !== ''
-            ? [$preferred]
-            : ['M3U8_AUTO_720', 'M3U8_AUTO_480'];
-
-        $lastError = null;
-
-        foreach ($types as $type) {
+        foreach (['480', '720'] as $quality) {
             try {
-                $playlist = $terabox->getHlsPlaylist($video->storage_folder, $type);
-                if ($type !== $preferred) {
-                    Cache::put('terabox_hls_quality_' . $video->id, $type, now()->addHours(1));
-                }
+                $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_' . $quality);
 
-                return [$type, $playlist];
+                Cache::put('terabox_hls_' . $video->id . '_' . $quality, static::rewritePlaylist($video, $playlist), now()->addMinutes(30));
+                static::warmFirstSegment($video, $terabox, $playlist);
             } catch (\Throwable $e) {
-                $lastError = $e;
+                Log::debug('[TERABOX-HLS] Pre-warm skipped for video ' . $video->id . ' at ' . $quality . 'p: ' . $e->getMessage());
             }
         }
-
-        // The cached quality stopped working (e.g. session re-tiered) — clear it
-        // and walk the full fallback chain once more before giving up.
-        if ($preferred && count($types) === 1) {
-            Cache::forget('terabox_hls_quality_' . $video->id);
-
-            return static::bestHlsPlaylist($terabox, $video);
-        }
-
-        throw $lastError ?? new \RuntimeException('No usable TeraBox HLS stream.');
     }
 
     protected static function rewritePlaylist(Video $video, string $playlist): string
