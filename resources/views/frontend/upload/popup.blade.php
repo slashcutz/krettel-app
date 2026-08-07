@@ -335,19 +335,13 @@
                                     this.syncProgress = data.percent || 0;
                                     this.syncUploaded = data.uploaded || 0;
                                     this.syncTotal = data.total || 0;
+                                    this.syncPhase = data.phase || '';
 
-                                    const now = Date.now();
-                                    const timeDiff = (this.syncLastTime ? (now - this.syncLastTime) / 1000 : 0);
-                                    if (timeDiff > 0.5 && this.syncLastLoaded >= 0) {
-                                        const bytesDiff = data.uploaded - this.syncLastLoaded;
-                                        if (bytesDiff > 0 && timeDiff > 0) {
-                                            const currentSpeed = bytesDiff / timeDiff;
-                                            this.syncSpeed = this.formatSpeed(currentSpeed);
-                                            const remaining = data.total - data.uploaded;
-                                            this.syncEta = currentSpeed > 0 ? this.formatETA(remaining / currentSpeed) : 'calculating...';
-                                        }
-                                        this.syncLastLoaded = data.uploaded;
-                                        this.syncLastTime = now;
+                                    if (data.chunked_speed !== undefined) {
+                                        this.syncSpeed = this.formatSpeed(data.chunked_speed);
+                                    }
+                                    if (data.chunked_eta !== undefined) {
+                                        this.syncEta = this.formatETA(data.chunked_eta);
                                     }
 
                                     this.syncPollTimer = setTimeout(tick, 1000);

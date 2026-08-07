@@ -717,7 +717,7 @@
                         if (this.pinchActive && e.touches.length >= 2) {
                             const dist = this.pinchTouchDist(e.touches);
                             const base = this.pinchStartDist || 1;
-                            const scale = Math.max(1, Math.min(3, this.pinchBaseScale * (dist / base)));
+                            const scale = Math.max(1, Math.min(2.2, this.pinchBaseScale * (dist / base)));
                             this.pinchScale = scale;
                             const mid = this.pinchTouchMid(e.touches);
                             this.pinchOx = mid.x;
@@ -1090,9 +1090,9 @@
                 <!-- Native Video Element -->
                 <video
                     x-ref="video"
-                    class="w-full h-full object-cover"
+                    class="w-full h-full object-contain"
                     :class="isFullscreen && !showControls ? 'cursor-none' : 'cursor-pointer'"
-                    :style="isFullscreen ? 'width:100%!important;height:100%!important;object-fit:cover!important;' : ''"
+                    :style="isFullscreen ? 'width:100%!important;height:100%!important;object-fit:contain!important;' : ''"
                     preload="auto"
                     poster="{{ $posterUrl }}"
                     @click="onVideoClick()"
@@ -1133,8 +1133,7 @@
                         <div class="flex items-center space-x-3 relative text-white/90">
                             <!-- CC / Captions Button -->
                             <button @click.stop="toggleCaptions()" class="p-1.5 hover:bg-white/10 rounded-full transition focus:outline-none"
-                                    :class="{ 'text-primary': captionsOn }"
-                                    x-show="hasSubtitles"
+                                    :class="{ 'text-primary': captionsOn, 'opacity-40 cursor-not-allowed': !hasSubtitles }"
                                     :disabled="!hasSubtitles">
                                 <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h18a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2zm4 9H5v-2h2v2zm6 0h-2v-2h2v2zm6 0h-2v-2h2v2z"></path></svg>
                             </button>

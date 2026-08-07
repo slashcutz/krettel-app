@@ -552,18 +552,11 @@
                                                 this.mobileProgress = data.percent || this.mobileProgress;
                                                 this.mobileStatus = data.phase || 'Syncing to Pixeldrain...';
 
-                                                const syncNow = Date.now();
-                                                const syncTimeDiff = (this.mobileLastTime ? (syncNow - this.mobileLastTime) / 1000 : 0);
-                                                if (syncTimeDiff > 0.5) {
-                                                    const syncBytesDiff = (data.uploaded || 0) - this.mobileLastLoaded;
-                                                    if (syncBytesDiff > 0 && syncTimeDiff > 0) {
-                                                        const currentSpeed = syncBytesDiff / syncTimeDiff;
-                                                        this.mobileSpeed = this.formatSpeed(currentSpeed);
-                                                        const remaining = (data.total || 0) - (data.uploaded || 0);
-                                                        this.mobileEta = this.formatEta(remaining / currentSpeed);
-                                                    }
-                                                    this.mobileLastLoaded = data.uploaded || 0;
-                                                    this.mobileLastTime = syncNow;
+                                                if (data.chunked_speed !== undefined) {
+                                                    this.mobileSpeed = this.formatSpeed(data.chunked_speed);
+                                                }
+                                                if (data.chunked_eta !== undefined) {
+                                                    this.mobileEta = this.formatEta(data.chunked_eta);
                                                 }
                                             } else {
                                                 this.mobileStatus = 'Finalizing...';
