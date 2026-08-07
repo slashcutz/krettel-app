@@ -25,8 +25,6 @@ php artisan storage:link
 export PORT="${PORT:-80}"
 sed "s|{{PORT}}|$PORT|g" /etc/nginx/conf.d/krettel.conf.template > /etc/nginx/conf.d/krettel.conf
 
-chown -R www-data:www-data storage bootstrap/cache
-
 # ---------------------------------------------------------------------------
 # Migrate (with a short wait for the DB to come up), then cache config/routes.
 # ---------------------------------------------------------------------------
@@ -48,6 +46,8 @@ fi
 php artisan db:seed --class=AdminUserSeeder --force || true
 
 php artisan optimize || true
+
+chown -R www-data:www-data storage bootstrap/cache
 
 # ---------------------------------------------------------------------------
 # Run nginx + php-fpm + the queue worker under supervisord.
