@@ -113,6 +113,7 @@ class VideoUploadController extends Controller
                     throw $e;
                 }
             }
+            }
         } else {
             Log::channel('krettel')->warning('[UPLOAD] No video file uploaded or file linked via TeraBox path.');
         }
