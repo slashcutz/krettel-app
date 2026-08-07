@@ -1,7 +1,7 @@
 <x-admin-layout>
     <x-slot name="header">Upload Video</x-slot>
     <div class="py-2" x-data="videoUploadWizard()">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto sm:px-6 lg:px-8 2xl:px-12">
             <div class="bg-card overflow-hidden shadow-sm sm:rounded-lg border border-border">
                 
                 <!-- Wizard Header / Progress -->

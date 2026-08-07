@@ -990,9 +990,9 @@
             <div class="w-full bg-black flex justify-center items-center relative shadow-2xl video-container overflow-hidden"
                  x-ref="videoContainer"
                  :class="{
-                    'aspect-video': !isFullscreen,
+                    'aspect-video 2xl:aspect-auto 2xl:h-[80vh]': !isFullscreen,
                     'max-h-none rounded-xl ring-1 ring-zinc-800': miniPlayer && !isFullscreen,
-                    'max-h-[85vh] lg:max-w-6xl lg:mx-auto lg:rounded-2xl': !miniPlayer && !isFullscreen,
+                    'max-h-[85vh] lg:max-w-6xl 2xl:max-w-[1600px] lg:mx-auto lg:rounded-2xl': !miniPlayer && !isFullscreen,
                     'is-paused': !isPlaying
                  }"
                  :style="isFullscreen ? 'position:fixed;top:0;left:0;width:100vw;height:100vh;max-width:none;max-height:none;z-index:99999;border-radius:0;margin:0;padding:0;overflow:hidden;' : ''"
@@ -1266,7 +1266,7 @@
 
             <!-- Video Info Section -->
             <div class="bg-zinc-950">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 relative z-10">
+                <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-6 lg:py-8 relative z-10">
                     <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
 
                         <!-- Left Column: Details -->

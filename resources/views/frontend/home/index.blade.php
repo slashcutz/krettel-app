@@ -31,7 +31,7 @@
             <x-hero-banner :video="$featured" />
 
             <!-- Video Sections -->
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-20 space-y-12">
+            <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-8 relative z-20 space-y-12">
                 
                 <!-- Continue Watching (Matching watch page UI + Desktop & Mobile Swiper) -->
                 @if(isset($watchHistory) && $watchHistory->isNotEmpty())
@@ -400,7 +400,7 @@
         
         <!-- Footer -->
         <footer class="bg-card/50 py-12 mt-12 border-t border-border">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-muted">
+            <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 text-center text-muted">
                 <p>&copy; {{ date('Y') }} Krettel. All rights reserved.</p>
             </div>
         </footer>
