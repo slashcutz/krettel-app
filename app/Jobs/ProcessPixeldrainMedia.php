@@ -42,11 +42,15 @@ class ProcessPixeldrainMedia implements ShouldQueue
                 throw new \RuntimeException('Staging file not found: ' . $absolutePath);
             }
 
-            // 1) Push the ORIGINAL file first. This is the step that used to
+            // 1) Ensure the file is a web-compatible MP4. If it's an MKV or HEVC/x265,
+            //    transcode it to MP4 locally before pushing it up to Pixeldrain.
+            $uploadPath = $this->transcodeOriginalToMp4($absolutePath, $progressKey);
+
+            // 2) Push the ORIGINAL (or transcoded) file first. This is the step that used to
             //    run inside store() and blow past the gateway's 60s request
             //    timeout (504). Running it here in the worker means the upload
             //    response returns in seconds.
-            $fileId = $this->pushOriginal($pixeldrain, $absolutePath, $progressKey);
+            $fileId = $this->pushOriginal($pixeldrain, $uploadPath, $progressKey);
 
             $this->video->update([
                 'storage_folder' => $fileId,
@@ -129,6 +133,69 @@ class ProcessPixeldrainMedia implements ShouldQueue
                 'video_id' => $this->video->id,
             ]);
         }
+    }
+
+    /**
+     * If the source is MKV or HEVC/x265, transcode it to a web-friendly MP4 (x264)
+     * before uploading. Returns the path to the file to upload (original or transcoded).
+     */
+    protected function transcodeOriginalToMp4(string $absolutePath, ?string $progressKey): string
+    {
+        $ffmpeg = config('ffmpeg.ffmpeg');
+        if (! $ffmpeg) {
+            return $absolutePath;
+        }
+
+        $container = \App\Support\MediaProbe::container($absolutePath);
+        $codec = \App\Support\MediaProbe::videoCodec($absolutePath);
+        $ext = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
+
+        $needsTranscode = ($container === 'mkv' || $ext === 'mkv' || in_array(strtolower($codec ?? ''), ['hevc', 'x265']));
+
+        if (! $needsTranscode) {
+            return $absolutePath;
+        }
+
+        $tmpFile = media_temp_dir() . DIRECTORY_SEPARATOR . 'pd_transcode_' . uniqid('', true) . '.mp4';
+
+        if ($progressKey) {
+            Cache::put($progressKey, [
+                'uploaded' => 0, 'total' => 0, 'percent' => 100,
+                'phase' => 'Converting MKV/x265 to MP4...',
+                'updated_at' => now()->toIso8601String(),
+            ], now()->addMinutes(90));
+        }
+
+        Log::channel('krettel')->info('[PIXELDRAIN-SYNC] Converting MKV/x265 original to MP4.', ['video_id' => $this->video->id]);
+
+        $args = [
+            $ffmpeg, '-y', '-nostdin', '-loglevel', 'error',
+            '-i', $absolutePath,
+            '-map', '0:v:0',
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '24',
+            '-map', '0:a?',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-movflags', '+faststart',
+            $tmpFile,
+        ];
+
+        $process = new \Symfony\Component\Process\Process($args);
+        $process->setTimeout(14400); // Allow up to 4 hours for full movie transcode
+        $process->run();
+
+        if ($process->isSuccessful() && is_file($tmpFile) && filesize($tmpFile) > 0) {
+            return $tmpFile;
+        }
+
+        Log::channel('krettel')->warning('[PIXELDRAIN-SYNC] Transcoding failed, falling back to original file.', [
+            'error' => trim($process->getErrorOutput())
+        ]);
+        @unlink($tmpFile);
+
+        return $absolutePath;
     }
 
     /**
