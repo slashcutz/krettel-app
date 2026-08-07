@@ -166,12 +166,15 @@
                                 maxBufferHole: 0.5,
                                 enableWorker: true,
                                 lowLatencyMode: false,
-                                fragLoadingTimeOut: 15000,
-                                manifestLoadingTimeOut: 10000,
-                                levelLoadingTimeOut: 10000,
-                                fragLoadingMaxRetry: 2,
-                                manifestLoadingMaxRetry: 2,
-                                levelLoadingMaxRetry: 2,
+                                fragLoadingTimeOut: 30000,
+                                manifestLoadingTimeOut: 30000,
+                                levelLoadingTimeOut: 30000,
+                                fragLoadingMaxRetry: 5,
+                                manifestLoadingMaxRetry: 5,
+                                levelLoadingMaxRetry: 5,
+                                fragLoadingRetryDelay: 1000,
+                                manifestLoadingRetryDelay: 1000,
+                                levelLoadingRetryDelay: 1000,
                                 startFragPrefetch: true,
                             });
                             hls.loadSource(src);
@@ -194,19 +197,23 @@
                             });
                             hls.on(Hls.Events.ERROR, (event, data) => {
                                 if (!data.fatal) return;
-                                console.log('[HLS] Fatal error:', data.type);
-                                switch (data.type) {
-                                    case Hls.ErrorTypes.NETWORK_ERROR:
-                                        // Transient CDN hiccup — resume loading instead of
-                                        // switching to the throttled direct stream.
-                                        hls.startLoad();
-                                        break;
-                                    case Hls.ErrorTypes.MEDIA_ERROR:
-                                        hls.recoverMediaError();
-                                        break;
-                                    default:
-                                        this.videoError = 'This video could not be loaded. It may still be processing or the file is not available.';
-                                        this.isPlaying = false;
+                                const failingUrl = (data.frag && data.frag.url) || data.url || '';
+                                const httpStatus = (data.response && (data.response.code || data.response.status)) || null;
+                                console.error('[HLS] Fatal error:', data.type, {
+                                    details: data.details,
+                                    url: failingUrl,
+                                    httpStatus: httpStatus,
+                                });
+                                if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                                    // A slow/throttled fragment can exceed the loader
+                                    // timeout once — startLoad() resumes loading rather
+                                    // than failing permanently.
+                                    hls.startLoad();
+                                } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                                    hls.recoverMediaError();
+                                } else {
+                                    this.videoError = 'This video could not be loaded. It may still be processing or the file is not available.';
+                                    this.isPlaying = false;
                                 }
                             });
                         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
