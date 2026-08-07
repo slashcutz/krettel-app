@@ -512,9 +512,8 @@
 
                 uploadInline(form, formData, storageChoice, fileName) {
                     this.mobileUploading = true;
-                    this.mobileProgress = 0;
                     this.mobileStatus = 'Preparing upload...';
-                    this.mobileSpeed = '--';
+                    this.mobileProgress = 0;
                     this.mobileEta = 'calculating...';
                     this.mobileLastLoaded = 0;
                     this.mobileLastTime = 0;
@@ -597,7 +596,7 @@
                     };
 
                     if (isFileMode) {
-                        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+                        const chunkSize = 2 * 1024 * 1024; // 2MB chunks for maximum mobile network stability
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
                         let retryCount = 0;

@@ -52,7 +52,7 @@
 
     <!-- Hover Info Overlay -->
     <div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-        <div class="flex items-center space-x-2 mb-2">
+        <div class="hidden lg:flex items-center space-x-2 mb-2">
             <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black hover:bg-gray-200 transition-colors">
                 <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </div>

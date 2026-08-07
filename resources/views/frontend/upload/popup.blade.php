@@ -441,7 +441,7 @@
                     };
 
                     if (isFileMode) {
-                        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+                        const chunkSize = 2 * 1024 * 1024; // 2MB chunks for maximum mobile network stability
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
                         let retryCount = 0;
