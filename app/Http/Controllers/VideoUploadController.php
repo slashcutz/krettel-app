@@ -41,14 +41,15 @@ class VideoUploadController extends Controller
                 'title' => 'required|string|max:255',
                 'category_id' => 'required|integer',
                 'visibility' => 'required|string|in:public,private,draft,scheduled',
-            'video_file' => 'nullable|file|mimes:mp4,mkv,webm|max:4194304', // 4GB max
-            'thumbnail' => 'nullable|image|max:5120',
-            'terabox_image' => 'nullable|string|max:500',
-            'previews' => 'nullable|array',
-            'previews.*' => 'nullable|string|max:500',
-            'preview_files' => 'nullable|array',
-            'preview_files.*' => 'nullable|image|max:5120',
-        ]);
+                // Relaxed strict mimes check to allow mobile browsers sending MKV as application/octet-stream
+                'video_file' => 'nullable|file|max:4194304', 
+                'thumbnail' => 'nullable|image|max:5120',
+                'terabox_image' => 'nullable|string|max:500',
+                'previews' => 'nullable|array',
+                'previews.*' => 'nullable|string|max:500',
+                'preview_files' => 'nullable|array',
+                'preview_files.*' => 'nullable|image|max:5120',
+            ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::channel('krettel')->error('[UPLOAD] Validation failed.', ['errors' => $e->errors()]);
             throw $e;
