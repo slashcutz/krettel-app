@@ -7,7 +7,7 @@ cd /var/www/html
 # Runtime prep. The Render Disk mounts over /var/www/html/storage and starts
 # empty, so recreate the writable tree the framework expects.
 # ---------------------------------------------------------------------------
-mkdir -p storage/app/public/hls storage/app/private/pending-uploads
+mkdir -p storage/app/public/hls storage/app/private/pending-uploads storage/app/media-tmp
 mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs
 
 # SQLite: ensure the DB file exists on the persistent disk before migrating.
