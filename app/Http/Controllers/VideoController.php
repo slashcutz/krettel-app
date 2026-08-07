@@ -436,6 +436,7 @@ class VideoController extends Controller
                 'header' => $headers,
                 'follow_location' => 1,
                 'max_redirects' => 5,
+                'ignore_errors' => true,
             ],
             'ssl' => [
                 'verify_peer' => false,
