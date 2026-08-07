@@ -868,9 +868,22 @@ class VideoUploadController extends Controller
     {
         $uploadToken = $request->input('upload_token');
         $totalChunks = (int) $request->input('total_chunks', 0);
+        $filename = $request->input('original_filename', 'video.mp4');
         
         if (!$uploadToken || $totalChunks <= 0) {
             return response()->json(['error' => 'Missing token or chunks'], 400);
+        }
+
+        // Check if fully stitched file already exists (in case connection dropped during stitch phase)
+        $cleanName = preg_replace('/[^a-zA-Z0-9.\-_]/', '', $filename);
+        $stitchedRelative = 'pending-uploads/' . $uploadToken . '_' . $cleanName;
+        $finalPath = storage_path('app/private/' . $stitchedRelative);
+        
+        if (file_exists($finalPath) && filesize($finalPath) > 0) {
+            return response()->json([
+                'uploaded_chunks' => $totalChunks,
+                'stitched_file_path' => $stitchedRelative
+            ]);
         }
 
         $chunkDir = storage_path('app/private/chunks/' . $uploadToken);

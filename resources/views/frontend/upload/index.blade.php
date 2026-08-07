@@ -524,8 +524,8 @@
 
                     let uploadToken = '';
                     if (isFileMode) {
-                        // Use only size for token to avoid iOS changing temp file names/dates
-                        uploadToken = 'vid_' + videoFile.size;
+                        // Use size and auth ID for token to avoid iOS changing temp file names/dates
+                        uploadToken = 'vid_{{ auth()->id() }}_' + videoFile.size;
                     } else {
                         const arr = new Uint32Array(2);
                         (window.crypto || window.msCrypto).getRandomValues(arr);
@@ -601,7 +601,7 @@
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
                         let retryCount = 0;
-                        const maxRetries = 10; // Increased to 10 for better resilience on screen wake
+                        const maxRetries = 20; // Increased to 20 for even better resilience on screen wake
 
                         const uploadNextChunk = () => {
                             if (currentChunk >= totalChunks) return;
@@ -682,9 +682,18 @@
                             xhr.send(chunkData);
                         };
 
-                        fetch('/upload/resume-check?upload_token=' + uploadToken + '&total_chunks=' + totalChunks + '&_=' + Date.now())
+                        fetch('/upload/resume-check?upload_token=' + uploadToken + '&total_chunks=' + totalChunks + '&original_filename=' + encodeURIComponent(videoFile.name) + '&_=' + Date.now())
                             .then(res => res.json())
                             .then(data => {
+                                if (data && data.stitched_file_path) {
+                                    // The file was already fully uploaded and stitched!
+                                    formData.delete('video_file');
+                                    formData.append('stitched_file_path', data.stitched_file_path);
+                                    this.mobileProgress = 100;
+                                    this.mobileStatus = 'Upload complete. Saving to database...';
+                                    submitFinalForm(formData);
+                                    return;
+                                }
                                 if (data && data.uploaded_chunks) {
                                     currentChunk = data.uploaded_chunks;
                                     const loadedTotal = currentChunk * chunkSize;
