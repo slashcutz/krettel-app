@@ -152,7 +152,7 @@ class VideoController extends Controller
         $rewritten = Cache::remember('terabox_hls_' . $video->id, now()->addMinutes(30), function () use ($video) {
             try {
                 $terabox = app(TeraBoxClient::class);
-                $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_480');
+                [$playlist] = static::bestHlsPlaylist($terabox, $video);
             } catch (\Throwable $e) {
                 Log::warning('[TERABOX-HLS] Failed to fetch playlist.', [
                     'video_id' => $video->id,
@@ -221,13 +221,56 @@ class VideoController extends Controller
 
         try {
             $terabox = app(TeraBoxClient::class);
-            $playlist = $terabox->getHlsPlaylist($video->storage_folder, 'M3U8_AUTO_480');
+            [$playlist] = static::bestHlsPlaylist($terabox, $video);
 
             Cache::put('terabox_hls_' . $video->id, static::rewritePlaylist($video, $playlist), now()->addMinutes(30));
             static::warmFirstSegment($video, $terabox, $playlist);
         } catch (\Throwable $e) {
             Log::debug('[TERABOX-HLS] Pre-warm skipped for video ' . $video->id . ': ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Fetch the highest streaming quality the account can serve.
+     *
+     * TeraBox free accounts are capped at 720p on the streaming CDN, so we
+     * request 720p first and fall back to 480p when the account is denied it.
+     * The working quality is cached so later playlist requests skip the retry
+     * round-trip.
+     *
+     * @return array{0: string, 1: string} [stream type, playlist body]
+     */
+    protected static function bestHlsPlaylist(TeraBoxClient $terabox, Video $video): array
+    {
+        $preferred = Cache::get('terabox_hls_quality_' . $video->id);
+        $types = is_string($preferred) && $preferred !== ''
+            ? [$preferred]
+            : ['M3U8_AUTO_720', 'M3U8_AUTO_480'];
+
+        $lastError = null;
+
+        foreach ($types as $type) {
+            try {
+                $playlist = $terabox->getHlsPlaylist($video->storage_folder, $type);
+                if ($type !== $preferred) {
+                    Cache::put('terabox_hls_quality_' . $video->id, $type, now()->addHours(1));
+                }
+
+                return [$type, $playlist];
+            } catch (\Throwable $e) {
+                $lastError = $e;
+            }
+        }
+
+        // The cached quality stopped working (e.g. session re-tiered) — clear it
+        // and walk the full fallback chain once more before giving up.
+        if ($preferred && count($types) === 1) {
+            Cache::forget('terabox_hls_quality_' . $video->id);
+
+            return static::bestHlsPlaylist($terabox, $video);
+        }
+
+        throw $lastError ?? new \RuntimeException('No usable TeraBox HLS stream.');
     }
 
     protected static function rewritePlaylist(Video $video, string $playlist): string
@@ -274,7 +317,12 @@ class VideoController extends Controller
 
     /**
      * Proxy the original 1080p file from TeraBox through our server.
-     * This bypasses TeraBox's 480p HLS quality cap for free accounts.
+     *
+     * Note: TeraBox throttles free-account dlinks hard, so this mode cannot
+     * stream 1080p smoothly — it is kept as a manual last-resort. The dlink is
+     * cached for a couple of minutes (and re-resolved once if it is consumed)
+     * so the browser's sequential range requests don't each pay the full
+     * session-verification latency.
      */
     public function streamDirect(Video $video)
     {
@@ -282,100 +330,140 @@ class VideoController extends Controller
             abort(404);
         }
 
-        try {
-            $terabox = app(TeraBoxClient::class);
-            if (str_starts_with($video->storage_folder, 'http://') || str_starts_with($video->storage_folder, 'https://')) {
-                $dlink = $terabox->getLinkFromShare($video->storage_folder);
-            } else {
-                $dlink = $terabox->getDirectLink($video->storage_folder);
-            }
+        $contentType = static::mimeForPath($video->storage_folder);
+        $terabox = app(TeraBoxClient::class);
 
-            // Determine Content-Type
-            $ext = strtolower(pathinfo($video->storage_folder, PATHINFO_EXTENSION));
-            $mimeMap = [
-                'mp4'  => 'video/mp4',
-                'mkv'  => 'video/x-matroska',
-                'webm' => 'video/webm',
-                'avi'  => 'video/x-msvideo',
-                'mov'  => 'video/quicktime',
-            ];
-            $contentType = $mimeMap[$ext] ?? 'video/mp4';
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            try {
+                $dlink = static::resolveDirectLink($video, $terabox);
 
-            // Forward the Range header to TeraBox for seeking
-            $opts = [
-                'http' => [
-                    'method' => 'GET',
-                    'header' => "User-Agent: " . config('terabox.user_agent') . "\r\n" .
-                                "Referer: https://www.1024terabox.com/\r\n"
-                ]
-            ];
+                $opts = [
+                    'http' => [
+                        'method' => 'GET',
+                        'header' => "User-Agent: " . config('terabox.user_agent') . "\r\n" .
+                                    "Referer: https://www.1024terabox.com/\r\n",
+                    ],
+                ];
 
-            $clientRange = request()->header('Range');
-            if ($clientRange) {
-                $opts['http']['header'] .= "Range: " . $clientRange . "\r\n";
-            }
-
-            $context = stream_context_create($opts);
-            $stream = fopen($dlink, 'rb', false, $context);
-
-            if (!$stream) {
-                throw new \RuntimeException('Failed to open remote stream.');
-            }
-
-            // Read the stream headers returned by TeraBox
-            $metaData = stream_get_meta_data($stream);
-            $wrapperData = $metaData['wrapper_data'] ?? [];
-            
-            $contentLength = null;
-            $contentRange = null;
-            $statusCode = 200;
-
-            foreach ($wrapperData as $headerLine) {
-                if (preg_match('/^HTTP\/\d\.\d\s+(\d+)/i', $headerLine, $matches)) {
-                    $statusCode = (int)$matches[1];
-                } elseif (preg_match('/^Content-Length:\s*(\d+)/i', $headerLine, $matches)) {
-                    $contentLength = $matches[1];
-                } elseif (preg_match('/^Content-Range:\s*(.+)/i', $headerLine, $matches)) {
-                    $contentRange = $matches[1];
-                }
-            }
-
-            $headers = [
-                'Content-Type' => $contentType,
-                'Accept-Ranges' => 'bytes',
-                'Cache-Control' => 'no-cache, no-store, must-revalidate',
-                'Pragma' => 'no-cache',
-                'Expires' => '0',
-            ];
-
-            if ($contentLength !== null) {
-                $headers['Content-Length'] = $contentLength;
-            }
-            if ($contentRange !== null) {
-                $headers['Content-Range'] = $contentRange;
-            }
-
-            return response()->stream(function () use ($stream) {
-                // Disable limits and compression
-                if (function_exists('apache_setenv')) {
-                    @apache_setenv('no-gzip', 1);
-                }
-                @ini_set('zlib.output_compression', 'Off');
-                @ob_implicit_flush(true);
-                
-                while (ob_get_level() > 0) {
-                    ob_end_clean();
+                $clientRange = request()->header('Range');
+                if ($clientRange) {
+                    $opts['http']['header'] .= "Range: " . $clientRange . "\r\n";
                 }
 
-                // Native stream piping to output buffer
-                fpassthru($stream);
-                fclose($stream);
-            }, $statusCode, $headers);
+                $stream = @fopen($dlink, 'rb', false, stream_context_create($opts));
 
-        } catch (\Throwable $e) {
-            Log::error('[STREAM-DIRECT] Proxy Failed: ' . $e->getMessage());
-            abort(502, 'Stream proxy failed: ' . $e->getMessage());
+                if (!$stream) {
+                    throw new \RuntimeException('Failed to open remote stream.');
+                }
+
+                $meta = static::parseStreamMeta($stream, $contentType);
+
+                return response()->stream(function () use ($stream) {
+                    // Disable limits and compression
+                    if (function_exists('apache_setenv')) {
+                        @apache_setenv('no-gzip', 1);
+                    }
+                    @ini_set('zlib.output_compression', 'Off');
+                    @ob_implicit_flush(true);
+
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+
+                    fpassthru($stream);
+                    fclose($stream);
+                }, $meta['status'], $meta['headers']);
+            } catch (\Throwable $e) {
+                // The cached single-use dlink may have been consumed by another
+                // connection — drop it and let the loop resolve a fresh one.
+                Log::warning('[STREAM-DIRECT] Attempt ' . ($attempt + 1) . ' failed for video ' . $video->id . ': ' . $e->getMessage());
+                Cache::store('file')->forget('terabox_dlink_' . $video->id);
+            }
         }
+
+        Log::error('[STREAM-DIRECT] Proxy failed for video ' . $video->id);
+        abort(502, 'Stream proxy failed.');
+    }
+
+    /**
+     * Resolve a direct download link for a TeraBox video, caching it briefly.
+     */
+    protected static function resolveDirectLink(Video $video, TeraBoxClient $terabox): string
+    {
+        $cacheKey = 'terabox_dlink_' . $video->id;
+        $cached = Cache::store('file')->get($cacheKey);
+
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        if (str_starts_with($video->storage_folder, 'http://') || str_starts_with($video->storage_folder, 'https://')) {
+            $dlink = $terabox->getLinkFromShare($video->storage_folder);
+        } else {
+            $dlink = $terabox->getDirectLink($video->storage_folder);
+        }
+
+        Cache::store('file')->put($cacheKey, $dlink, now()->addMinutes(2));
+
+        return $dlink;
+    }
+
+    protected static function mimeForPath(string $path): string
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $mimeMap = [
+            'mp4'  => 'video/mp4',
+            'mkv'  => 'video/x-matroska',
+            'webm' => 'video/webm',
+            'avi'  => 'video/x-msvideo',
+            'mov'  => 'video/quicktime',
+        ];
+
+        return $mimeMap[$ext] ?? 'video/mp4';
+    }
+
+    /**
+     * Extract the upstream status code + range metadata so the browser can
+     * seek through the proxied stream.
+     */
+    protected static function parseStreamMeta($stream, string $contentType): array
+    {
+        $metaData = stream_get_meta_data($stream);
+        $wrapperData = $metaData['wrapper_data'] ?? [];
+
+        $contentLength = null;
+        $contentRange = null;
+        $statusCode = 200;
+
+        foreach ($wrapperData as $headerLine) {
+            if (preg_match('/^HTTP\/\d\.\d\s+(\d+)/i', $headerLine, $matches)) {
+                $statusCode = (int) $matches[1];
+            } elseif (preg_match('/^Content-Length:\s*(\d+)/i', $headerLine, $matches)) {
+                $contentLength = $matches[1];
+            } elseif (preg_match('/^Content-Range:\s*(.+)/i', $headerLine, $matches)) {
+                $contentRange = $matches[1];
+            }
+        }
+
+        $headers = [
+            'Content-Type' => $contentType,
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ];
+
+        if ($contentLength !== null) {
+            $headers['Content-Length'] = $contentLength;
+        }
+        if ($contentRange !== null) {
+            $headers['Content-Range'] = $contentRange;
+        }
+
+        return [
+            'status' => $statusCode,
+            'headers' => $headers,
+        ];
     }
 
     /**

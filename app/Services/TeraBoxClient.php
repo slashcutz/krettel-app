@@ -685,7 +685,10 @@ class TeraBoxClient
      */
     public function getDirectLink(string $remotePath): string
     {
-        $this->ensureAuthenticated();
+        // Fast path: attach the session cookie without the full 2-3 round-trip
+        // verification so playback starts sooner. Falls back to a verified
+        // session if the cookie alone is rejected (e.g. it expired).
+        $this->applySessionCookie();
 
         $json = $this->postForm(
             $this->whost . '/api/filemetas',
@@ -698,6 +701,21 @@ class TeraBoxClient
 
         $info = $json['info'] ?? [];
         $dlink = $info[0]['dlink'] ?? '';
+
+        if (! $dlink && ($json['errno'] ?? 0) !== 0) {
+            $this->ensureAuthenticated();
+            $json = $this->postForm(
+                $this->whost . '/api/filemetas',
+                [
+                    'dlink' => 1,
+                    'origin' => 'dlna',
+                    'target' => json_encode([$remotePath]),
+                ]
+            );
+            $info = $json['info'] ?? [];
+            $dlink = $info[0]['dlink'] ?? '';
+        }
+
         if (! $dlink) {
             throw new RuntimeException('Could not obtain direct link for ' . $remotePath . ' (errno ' . ($json['errno'] ?? '?') . ')');
         }
