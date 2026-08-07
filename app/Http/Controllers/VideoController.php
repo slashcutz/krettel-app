@@ -422,59 +422,80 @@ class VideoController extends Controller
         $client = app(\App\Services\PixeldrainClient::class);
         $url = $client->fileUrl($fileId);
 
-        $headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\n" .
-                   "Accept: */*\r\n";
+        try {
+            $guzzleOpts = [
+                'stream' => true,
+                'verify' => false,
+                'headers' => [
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept' => '*/*',
+                ],
+            ];
 
-        $authHeader = $client->authHeader();
-        if ($authHeader) {
-            $headers .= $authHeader . "\r\n";
-        }
+            $authHeader = $client->authHeader();
+            if ($authHeader) {
+                if (preg_match('/^Authorization:\s*(.+)$/i', $authHeader, $m)) {
+                    $guzzleOpts['headers']['Authorization'] = $m[1];
+                }
+            }
 
-        $opts = [
-            'http' => [
-                'method' => 'GET',
-                'header' => $headers,
-                'follow_location' => 1,
-                'max_redirects' => 5,
-                'ignore_errors' => true,
-            ],
-            'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false,
-            ],
-        ];
+            $clientRange = request()->header('Range');
+            if ($clientRange) {
+                $guzzleOpts['headers']['Range'] = $clientRange;
+            }
 
-        $clientRange = request()->header('Range');
-        if ($clientRange) {
-            $opts['http']['header'] .= "Range: " . $clientRange . "\r\n";
-        }
+            $http = new \GuzzleHttp\Client([
+                'timeout' => 7200,
+                'allow_redirects' => ['max' => 5, 'strict' => true, 'referer' => true],
+            ]);
 
-        $stream = @fopen($url, 'rb', false, stream_context_create($opts));
+            $response = $http->request('GET', $url, $guzzleOpts);
+            $statusCode = $response->getStatusCode();
 
-        if (! $stream) {
-            $err = error_get_last();
-            Log::warning('[PIXELDRAIN-STREAM] Failed to open upstream stream for file ' . $fileId . '. URL: ' . $url . '. Error: ' . ($err['message'] ?? 'unknown'));
+            $responseHeaders = [
+                'Content-Type' => $contentType,
+                'Accept-Ranges' => 'bytes',
+                'Cache-Control' => 'no-cache, no-store, must-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+                'X-Accel-Buffering' => 'no',
+            ];
+
+            if ($response->hasHeader('Content-Length')) {
+                $responseHeaders['Content-Length'] = $response->getHeaderLine('Content-Length');
+            }
+            if ($response->hasHeader('Content-Range')) {
+                $responseHeaders['Content-Range'] = $response->getHeaderLine('Content-Range');
+            }
+
+            $body = $response->getBody();
+
+            return response()->stream(function () use ($body) {
+                @ini_set('max_execution_time', '0');
+                @ini_set('default_socket_timeout', '0');
+                if (function_exists('apache_setenv')) {
+                    @apache_setenv('no-gzip', 1);
+                }
+                @ini_set('zlib.output_compression', 'Off');
+                @ob_implicit_flush(true);
+
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+
+                while (!$body->eof()) {
+                    $chunk = $body->read(65536);
+                    if ($chunk !== '') {
+                        echo $chunk;
+                        flush();
+                    }
+                }
+            }, $statusCode, $responseHeaders);
+
+        } catch (\Throwable $e) {
+            Log::error('[PIXELDRAIN-STREAM] Guzzle proxy failed for file ' . $fileId . ': ' . $e->getMessage());
             abort(502, 'Stream unavailable. Please try again later.');
         }
-
-        $meta = static::parseStreamMeta($stream, $contentType);
-
-        return response()->stream(function () use ($stream) {
-            @ini_set('max_execution_time', '0');
-            @ini_set('default_socket_timeout', '0');
-            if (function_exists('apache_setenv')) {
-                @apache_setenv('no-gzip', 1);
-            }
-            @ini_set('zlib.output_compression', 'Off');
-            @ob_implicit_flush(true);
-
-            while (ob_get_level() > 0) {
-                ob_end_clean();
-            }
-
-            fpassthru($stream);
-            fclose($stream);
-        }, $meta['status'], $meta['headers']);
     }
 
     /**
