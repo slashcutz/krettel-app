@@ -890,11 +890,11 @@
                                  @if($video->video_url === 'terabox-remote')
                                      <!-- Quality Modes for TeraBox Remote -->
                                      <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('auto')">
-                                         <span class="text-sm" :class="{ 'text-primary font-bold': !isDirectStream, 'text-gray-300': isDirectStream }">Auto HD (720p Fast)</span>
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': !isDirectStream, 'text-gray-300': isDirectStream }">480p (Fast)</span>
                                          <svg x-show="!isDirectStream" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                      </div>
                                      <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('original')">
-                                         <span class="text-sm" :class="{ 'text-primary font-bold': isDirectStream, 'text-gray-300': !isDirectStream }">Original 1080p (Slow on free)</span>
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': isDirectStream, 'text-gray-300': !isDirectStream }">Original 1080p (Slow)</span>
                                          <svg x-show="isDirectStream" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                      </div>
                                  @else
