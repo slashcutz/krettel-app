@@ -10,12 +10,11 @@ return [
     | Pixeldrain provides an official public API for file uploads, metadata
     | and downloads, authenticated with a personal API key.
     |
-    | Use https://pixeldrain.net (or another official mirror) if your ISP
-    | blocks the main .com domain.
+    | Use https://pixeldrain.com as the main domain.
     |
     */
 
-    'base_url' => env('PIXELDRAIN_BASE_URL', 'https://pixeldrain.net'),
+    'base_url' => env('PIXELDRAIN_BASE_URL', 'https://pixeldrain.com'),
 
     'api_key' => env('PIXELDRAIN_API_KEY'),
 

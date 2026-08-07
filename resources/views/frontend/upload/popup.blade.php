@@ -441,7 +441,7 @@
                     };
 
                     if (isFileMode) {
-                        const chunkSize = 20 * 1024 * 1024; // 20MB
+                        const chunkSize = 20 * 1024 * 1024; // 20MB chunks
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
                         let retryCount = 0;
