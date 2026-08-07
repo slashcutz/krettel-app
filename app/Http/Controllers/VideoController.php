@@ -422,7 +422,7 @@ class VideoController extends Controller
         $client = app(\App\Services\PixeldrainClient::class);
         $url = $client->fileUrl($fileId);
 
-        $headers = "User-Agent: " . config('terabox.user_agent') . "\r\n" .
+        $headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\n" .
                    "Accept: */*\r\n";
 
         $authHeader = $client->authHeader();
@@ -430,7 +430,18 @@ class VideoController extends Controller
             $headers .= $authHeader . "\r\n";
         }
 
-        $opts = ['http' => ['method' => 'GET', 'header' => $headers]];
+        $opts = [
+            'http' => [
+                'method' => 'GET',
+                'header' => $headers,
+                'follow_location' => 1,
+                'max_redirects' => 5,
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ];
 
         $clientRange = request()->header('Range');
         if ($clientRange) {
@@ -440,7 +451,8 @@ class VideoController extends Controller
         $stream = @fopen($url, 'rb', false, stream_context_create($opts));
 
         if (! $stream) {
-            Log::warning('[PIXELDRAIN-STREAM] Failed to open upstream stream for file ' . $fileId);
+            $err = error_get_last();
+            Log::warning('[PIXELDRAIN-STREAM] Failed to open upstream stream for file ' . $fileId . '. URL: ' . $url . '. Error: ' . ($err['message'] ?? 'unknown'));
             abort(502, 'Stream unavailable. Please try again later.');
         }
 
@@ -593,9 +605,12 @@ class VideoController extends Controller
             $args = [
                 $ffmpeg,
                 '-y', '-nostdin', '-loglevel', 'error',
+                '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 '-headers', $authHeaders,
+                '-tls_verify', '0',
                 '-i', $videoUrl,
                 '-headers', $authHeaders,
+                '-tls_verify', '0',
                 '-i', $audioUrl,
                 '-map', '0:v:0',
                 '-map', '1:a:0',

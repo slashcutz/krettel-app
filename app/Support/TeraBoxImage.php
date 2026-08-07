@@ -31,6 +31,10 @@ class TeraBoxImage
             return $value;
         }
 
+        if (! file_exists(storage_path('app/public/' . $value)) && ! file_exists(public_path('storage/' . $value))) {
+            return null;
+        }
+
         return asset('storage/' . $value);
     }
 }

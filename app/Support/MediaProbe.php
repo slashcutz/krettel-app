@@ -100,6 +100,7 @@ class MediaProbe
             $out[] = [
                 'index' => (int) ($stream['index'] ?? count($out)),
                 'codec' => $stream['codec_name'] ?? null,
+                'codec_type' => 'subtitle',
                 'language' => isset($stream['tags']['language'])
                     ? strtolower((string) $stream['tags']['language'])
                     : null,
