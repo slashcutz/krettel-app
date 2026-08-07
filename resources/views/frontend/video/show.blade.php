@@ -888,8 +888,13 @@
                 padding: 10px 0;
                 display: none;
                 z-index: 50;
-                max-height: 60vh;
+                max-height: 160px; /* Fit inside mobile 16:9 aspect ratio */
                 overflow-y: auto;
+            }
+            @media (min-width: 1024px) {
+                .settings-menu {
+                    max-height: 60vh;
+                }
             }
             .settings-menu.show {
                 display: block;
@@ -987,12 +992,12 @@
             @endphp
             <div class="transition-all duration-300 ease-in-out"
                  :class="miniPlayer ? 'fixed z-[60] bottom-20 sm:bottom-4 inset-x-0 sm:inset-x-auto sm:right-4 w-full sm:w-96 px-3 sm:px-0' : 'w-full lg:px-4 lg:pt-4'">
-            <div class="w-full bg-black flex justify-center items-center relative shadow-2xl video-container overflow-hidden"
+            <div class="w-full bg-black flex justify-center items-center relative shadow-2xl video-container"
                  x-ref="videoContainer"
                  :class="{
                     'aspect-video 2xl:aspect-auto 2xl:h-[80vh]': !isFullscreen,
-                    'max-h-none rounded-xl ring-1 ring-zinc-800': miniPlayer && !isFullscreen,
-                    'max-h-[85vh] lg:max-w-6xl 2xl:max-w-[1600px] lg:mx-auto lg:rounded-2xl': !miniPlayer && !isFullscreen,
+                    'max-h-none rounded-xl ring-1 ring-zinc-800 lg:overflow-hidden': miniPlayer && !isFullscreen,
+                    'max-h-[85vh] lg:max-w-6xl 2xl:max-w-[1600px] lg:mx-auto lg:rounded-2xl lg:overflow-hidden': !miniPlayer && !isFullscreen,
                     'is-paused': !isPlaying
                  }"
                  :style="isFullscreen ? 'position:fixed;top:0;left:0;width:100vw;height:100vh;max-width:none;max-height:none;z-index:99999;border-radius:0;margin:0;padding:0;overflow:hidden;' : ''"
