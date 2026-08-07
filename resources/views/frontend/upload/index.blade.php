@@ -524,8 +524,8 @@
 
                     let uploadToken = '';
                     if (isFileMode) {
-                        const cleanName = videoFile.name.replace(/[^a-zA-Z0-9]/g, '') || 'file';
-                        uploadToken = cleanName + '_' + videoFile.size + '_' + videoFile.lastModified;
+                        // Use only size for token to avoid iOS changing temp file names/dates
+                        uploadToken = 'vid_' + videoFile.size;
                     } else {
                         const arr = new Uint32Array(2);
                         (window.crypto || window.msCrypto).getRandomValues(arr);
@@ -601,7 +601,7 @@
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
                         let retryCount = 0;
-                        const maxRetries = 3;
+                        const maxRetries = 10; // Increased to 10 for better resilience on screen wake
 
                         const uploadNextChunk = () => {
                             if (currentChunk >= totalChunks) return;
@@ -682,7 +682,7 @@
                             xhr.send(chunkData);
                         };
 
-                        fetch('/upload/resume-check?upload_token=' + uploadToken + '&total_chunks=' + totalChunks)
+                        fetch('/upload/resume-check?upload_token=' + uploadToken + '&total_chunks=' + totalChunks + '&_=' + Date.now())
                             .then(res => res.json())
                             .then(data => {
                                 if (data && data.uploaded_chunks) {
