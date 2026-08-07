@@ -280,6 +280,26 @@
                                 </div>
                             </div>
 
+                            <!-- Inline upload progress (mobile fallback) -->
+                            <div x-show="mobileUploading" class="mb-6 rounded-xl border border-primary/30 bg-secondary/40 p-5">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center space-x-3">
+                                        <svg class="w-5 h-5 text-primary animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                        <span class="text-white font-semibold text-sm">Uploading Video</span>
+                                    </div>
+                                    <span class="text-white font-bold text-sm" x-text="mobileProgress + '%'"></span>
+                                </div>
+                                <div class="w-full bg-zinc-800 rounded-full h-2.5 mb-2 overflow-hidden">
+                                    <div class="bg-primary h-2.5 rounded-full transition-all duration-300" :style="`width: ${mobileProgress}%`"></div>
+                                </div>
+                                <p class="text-xs text-muted" x-text="mobileStatus"></p>
+                                <div class="flex justify-between text-[11px] text-muted mt-1.5">
+                                    <span x-text="'Speed: ' + mobileSpeed"></span>
+                                    <span x-text="'ETA: ' + mobileEta"></span>
+                                </div>
+                                <p class="text-[10px] text-muted mt-2">Keep this page open until the upload finishes.</p>
+                            </div>
+
                             <!-- Action Buttons (fixed bottom bar on mobile/tablet, static on desktop) -->
                             <div class="fixed bottom-24 inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur-md px-4 py-3 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 sm:justify-between lg:static lg:mt-8 lg:border-t lg:bg-transparent lg:backdrop-blur-none lg:px-0 lg:py-0 lg:pt-4">
                                 <button type="button" @click="step--" x-show="step > 1" class="px-6 py-3 rounded-lg border border-border text-white hover:bg-secondary transition-colors w-full sm:w-auto">
@@ -307,6 +327,8 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
+        const PROGRESS_URL = '{{ route("upload.progress", "__TOKEN__") }}';
+
         function videoUploadWizard() {
             return {
                 step: 1,
@@ -323,6 +345,13 @@
                 videoPreview: null,
                 thumbnailFile: null,
                 thumbnailPreview: null,
+                mobileUploading: false,
+                mobileProgress: 0,
+                mobileStatus: '',
+                mobileSpeed: '--',
+                mobileEta: 'calculating...',
+                mobileLastLoaded: 0,
+                mobileLastTime: 0,
                 triggerFile(id) {
                     document.getElementById(id).click();
                 },
@@ -366,20 +395,32 @@
                     }
                 },
                 submitForm() {
+                    if (this.mobileUploading) return;
+
                     const form = document.getElementById('uploadForm');
                     const formData = new FormData(form);
                     const storageChoice = document.querySelector('[name="storage_provider"]')?.value || 'local';
                     const videoFileName = this.videoFile ? this.videoFile.name : 'Video';
-                    
+
+                    // Mobile fallback: mobile browsers block or suspend popup
+                    // windows, so upload inline on this page instead. The
+                    // desktop popup upload manager below is left untouched.
+                    if (window.matchMedia('(max-width: 767px), (pointer: coarse)').matches) {
+                        this.uploadInline(form, formData, storageChoice, videoFileName);
+                        return;
+                    }
+
                     // Convert FormData to an array of entries so it can be cloned via postMessage
                     const entries = [];
                     for (let [key, value] of formData.entries()) {
                         entries.push([key, value]);
                     }
 
-                    // Open popup
+                    // Open popup. Unique window name per upload so starting another
+                    // upload does not reuse/replace a popup that is still uploading.
                     const popupUrl = '{{ route("upload.popup") }}';
-                    const popup = window.open(popupUrl, 'UploadManager', 'width=450,height=300,toolbar=0,menubar=0,location=0,status=0,scrollbars=0,resizable=0');
+                    const popupName = 'UploadManager_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+                    const popup = window.open(popupUrl, popupName, 'width=450,height=300,toolbar=0,menubar=0,location=0,status=0,scrollbars=0,resizable=0');
                     
                     if (!popup || popup.closed || typeof popup.closed === 'undefined') {
                         Swal.fire({
@@ -391,9 +432,11 @@
                         return;
                     }
 
-                    // Wait for popup to signal it's ready, then send data
+                    // Wait for popup to signal it's ready, then send data.
+                    // Only accept the message from THIS popup so multiple
+                    // simultaneous uploads do not cross-talk.
                     const messageHandler = (event) => {
-                        if (event.data && event.data.type === 'POPUP_READY') {
+                        if (event.source === popup && event.data && event.data.type === 'POPUP_READY') {
                             popup.postMessage({
                                 type: 'START_UPLOAD',
                                 action: form.action,
@@ -430,6 +473,164 @@
 
                     form.reset();
                     this.step = 1;
+                },
+
+                formatSize(bytes) {
+                    if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+                    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+                    if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB';
+                    return bytes + ' B';
+                },
+
+                formatSpeed(bytesPerSec) {
+                    if (bytesPerSec >= 1048576) return (bytesPerSec / 1048576).toFixed(1) + ' MB/s';
+                    if (bytesPerSec >= 1024) return (bytesPerSec / 1024).toFixed(0) + ' KB/s';
+                    return bytesPerSec.toFixed(0) + ' B/s';
+                },
+
+                formatEta(seconds) {
+                    if (!isFinite(seconds) || seconds <= 0) return 'calculating...';
+                    if (seconds < 60) return Math.ceil(seconds) + 's remaining';
+                    if (seconds < 3600) return Math.ceil(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's remaining';
+                    return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm remaining';
+                },
+
+                uploadInline(form, formData, storageChoice, fileName) {
+                    this.mobileUploading = true;
+                    this.mobileProgress = 0;
+                    this.mobileStatus = 'Preparing upload...';
+                    this.mobileSpeed = '--';
+                    this.mobileEta = 'calculating...';
+                    this.mobileLastLoaded = 0;
+                    this.mobileLastTime = 0;
+
+                    // Token lets the server report server-side progress (after the
+                    // browser -> server leg, the server pushes to Pixeldrain).
+                    let uploadToken = '';
+                    if (storageChoice === 'pixeldrain') {
+                        const arr = new Uint32Array(2);
+                        (window.crypto || window.msCrypto).getRandomValues(arr);
+                        uploadToken = arr[0].toString(36) + arr[1].toString(36) + Date.now().toString(36);
+                        formData.append('upload_token', uploadToken);
+                    }
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', form.action, true);
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                    xhr.setRequestHeader('Accept', 'application/json');
+
+                    let syncTimer = null;
+
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable) {
+                            this.mobileProgress = Math.round((e.loaded / e.total) * 100);
+                            this.mobileStatus = 'Uploading to server... (' + this.formatSize(e.loaded) + ' / ' + this.formatSize(e.total) + ')';
+
+                            const now = Date.now();
+                            const timeDiff = (this.mobileLastTime ? (now - this.mobileLastTime) / 1000 : 0);
+                            if (timeDiff > 0.5) {
+                                const bytesDiff = e.loaded - this.mobileLastLoaded;
+                                if (bytesDiff > 0 && timeDiff > 0) {
+                                    const currentSpeed = bytesDiff / timeDiff;
+                                    this.mobileSpeed = this.formatSpeed(currentSpeed);
+                                    this.mobileEta = this.formatEta((e.total - e.loaded) / currentSpeed);
+                                }
+                                this.mobileLastLoaded = e.loaded;
+                                this.mobileLastTime = now;
+                            }
+
+                            // Browser -> server leg is done; the server is now
+                            // pushing to Pixeldrain. Poll the same progress
+                            // endpoint the popup uses to keep the bar moving.
+                            if (storageChoice === 'pixeldrain' && e.loaded >= e.total && !syncTimer) {
+                                const url = PROGRESS_URL.replace('__TOKEN__', uploadToken);
+                                const tick = () => {
+                                    fetch(url, { headers: { 'Accept': 'application/json' } })
+                                        .then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status))
+                                        .then(data => {
+                                            if (data.active) {
+                                                this.mobileProgress = data.percent || this.mobileProgress;
+                                                this.mobileStatus = data.phase || 'Syncing to Pixeldrain...';
+
+                                                const syncNow = Date.now();
+                                                const syncTimeDiff = (this.mobileLastTime ? (syncNow - this.mobileLastTime) / 1000 : 0);
+                                                if (syncTimeDiff > 0.5) {
+                                                    const syncBytesDiff = (data.uploaded || 0) - this.mobileLastLoaded;
+                                                    if (syncBytesDiff > 0 && syncTimeDiff > 0) {
+                                                        const currentSpeed = syncBytesDiff / syncTimeDiff;
+                                                        this.mobileSpeed = this.formatSpeed(currentSpeed);
+                                                        const remaining = (data.total || 0) - (data.uploaded || 0);
+                                                        this.mobileEta = this.formatEta(remaining / currentSpeed);
+                                                    }
+                                                    this.mobileLastLoaded = data.uploaded || 0;
+                                                    this.mobileLastTime = syncNow;
+                                                }
+                                            } else {
+                                                this.mobileStatus = 'Finalizing...';
+                                            }
+                                            syncTimer = setTimeout(tick, 1000);
+                                        })
+                                        .catch(() => { syncTimer = setTimeout(tick, 2000); });
+                                };
+                                tick();
+                            }
+                        }
+                    };
+
+                    xhr.onload = () => {
+                        if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+                        this.mobileUploading = false;
+
+                        let data = {};
+                        try { data = JSON.parse(xhr.responseText); } catch (e) { data = {}; }
+
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Upload Complete!',
+                                text: storageChoice === 'pixeldrain'
+                                    ? 'Your video is uploaded. Processing continues in the background.'
+                                    : 'Your video has been uploaded successfully.',
+                                confirmButtonText: 'OK',
+                                confirmButtonColor: '#e50914',
+                                background: '#1a1a1a',
+                                color: '#fff',
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Upload Failed',
+                                text: 'Server returned an error: ' + xhr.status,
+                                confirmButtonText: 'OK',
+                                confirmButtonColor: '#e50914',
+                                background: '#1a1a1a',
+                                color: '#fff',
+                            });
+                        }
+
+                        form.reset();
+                        this.step = 1;
+                        this.videoFile = null;
+                        this.videoPreview = null;
+                        this.thumbnailFile = null;
+                        this.thumbnailPreview = null;
+                    };
+
+                    xhr.onerror = () => {
+                        if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+                        this.mobileUploading = false;
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Upload Failed',
+                            text: 'A network error occurred. Please try again.',
+                            confirmButtonText: 'OK',
+                            confirmButtonColor: '#e50914',
+                            background: '#1a1a1a',
+                            color: '#fff',
+                        });
+                    };
+
+                    xhr.send(formData);
                 }
             }
         }

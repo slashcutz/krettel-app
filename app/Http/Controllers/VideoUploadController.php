@@ -7,6 +7,7 @@ use App\Models\Video;
 use App\Models\VideoAudioTrack;
 use App\Models\Language;
 use App\Jobs\TranscodeVideoToHls;
+use App\Jobs\ProcessPixeldrainMedia;
 use App\Jobs\UploadVideoToTeraBox;
 use App\Support\LanguageCodes;
 use App\Support\MediaProbe;
@@ -240,100 +241,25 @@ class VideoUploadController extends Controller
                 Log::channel('krettel')->info('[UPLOAD] Status -> processing (HLS transcode queued).', ['video_id' => $video->id]);
                 TranscodeVideoToHls::dispatch($video, $stagingPath);
             } elseif ($storageProvider === 'pixeldrain') {
-                // Pixeldrain always wins: upload the original file in the SAME
-                // request (no background job), even for multi-audio sources.
-                // It is streamed at its native resolution (upload 720p/1080p MP4)
-                // and plays the default audio track.
-                // Pixeldrain has no transcode tier — upload the original file in
-                // the SAME request (no background job) and stream it at its
-                // native resolution (upload 720p/1080p MP4).
-                Log::channel('krettel')->info('[UPLOAD] Status -> pixeldrain (sync upload).', ['video_id' => $video->id]);
+                // The whole Pixeldrain push (original file + audio split +
+                // quality variants) runs in the background job so store()
+                // returns immediately. A synchronous push would exceed the
+                // gateway request timeout (504) for multi-GB files.
+                Log::channel('krettel')->info('[UPLOAD] Status -> pixeldrain (queued upload).', ['video_id' => $video->id]);
 
                 $uploadToken = (string) $request->input('upload_token');
-                $progressKey = $uploadToken !== '' ? 'pixeldrain_upload_' . $uploadToken : null;
 
-                try {
-                    @set_time_limit(0);
-                    $pixeldrain = app(\App\Services\PixeldrainClient::class);
+                $video->update([
+                    'video_url' => 'processing',
+                    'storage_provider' => 'pixeldrain',
+                ]);
 
-                    if ($progressKey) {
-                        $pixeldrain->onProgress(function ($uploaded, $total) use ($progressKey) {
-                            Cache::put($progressKey, [
-                                'uploaded' => (int) $uploaded,
-                                'total' => (int) $total,
-                                'percent' => $total > 0 ? (int) round(($uploaded / $total) * 100) : 0,
-                                'updated_at' => now()->toIso8601String(),
-                            ], now()->addMinutes(30));
-                        });
-                    }
+                ProcessPixeldrainMedia::dispatch($video, $stagingPath, $uploadToken !== '' ? $uploadToken : null);
 
-                    $fileId = $pixeldrain->upload($absolutePath, basename($stagingPath));
-
-                    if ($progressKey) {
-                        Cache::forget($progressKey);
-                    }
-
-                    $video->update([
-                        'video_url' => 'pixeldrain-remote',
-                        'storage_folder' => $fileId,
-                        'storage_provider' => 'pixeldrain',
-                    ]);
-
-                    try {
-                        $this->uploadAudioTracksToPixeldrain($video, $absolutePath, $pixeldrain);
-                    } catch (\Throwable $e) {
-                        // The video itself is already on Pixeldrain — never fail
-                        // the whole upload because an extra audio track failed.
-                        Log::channel('krettel')->error('[PIXELDRAIN-SYNC] Audio track split/upload failed (video kept).', [
-                            'video_id' => $video->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-
-                    try {
-                        $this->uploadQualityVariantsToPixeldrain($video, $absolutePath, $pixeldrain);
-                    } catch (\Throwable $e) {
-                        // Same rule: variants are a bonus, never fail the upload.
-                        Log::channel('krettel')->error('[PIXELDRAIN-SYNC] Quality variant transcode/upload failed (video kept).', [
-                            'video_id' => $video->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-
-                    Storage::disk('local')->delete($stagingPath);
-
-                    Log::channel('krettel')->info('[PIXELDRAIN-SYNC] Video uploaded synchronously.', [
-                        'video_id' => $video->id,
-                        'file_id' => $fileId,
-                    ]);
-
-                    \App\Models\Notification::create([
-                        'user_id' => auth()->id(),
-                        'title' => 'Upload Complete',
-                        'message' => "'{$video->title}' is now ready to watch.",
-                        'type' => 'success',
-                        'link' => route('video.show', $video->slug),
-                    ]);
-                } catch (\Throwable $e) {
-                    if ($progressKey) {
-                        Cache::forget($progressKey);
-                    }
-
-                    Log::channel('krettel')->error('[PIXELDRAIN-SYNC] Sync upload failed.', [
-                        'video_id' => $video->id,
-                        'error' => $e->getMessage(),
-                    ]);
-
-                    $video->update(['video_url' => 'failed']);
-
-                    \App\Models\Notification::create([
-                        'user_id' => auth()->id(),
-                        'title' => 'Upload Failed',
-                        'message' => "'{$video->title}' failed to upload to Pixeldrain.",
-                        'type' => 'error',
-                        'link' => route('admin.videos.index'),
-                    ]);
-                }
+                Log::channel('krettel')->info('[PIXELDRAIN-SYNC] Upload queued; media job dispatched.', [
+                    'video_id' => $video->id,
+                    'has_token' => $uploadToken !== '',
+                ]);
             } else {
                 Log::channel('krettel')->warning(
                     '[UPLOAD] Single-audio source (' . ($container ?: 'unknown') . ', ' . $totalAudio . ' audio) — deferring to TeraBox (no audio switcher).',
@@ -417,6 +343,8 @@ class VideoUploadController extends Controller
             $state = 'pixeldrain';
         } elseif ($video->storage_provider === 'pixeldrain' && $video->video_url === 'processing') {
             $state = 'pixeldrain-uploading';
+        } elseif ($video->storage_provider === 'pixeldrain' && $video->video_url === 'failed') {
+            $state = 'failed';
         } elseif ($video->video_url === 'terabox-remote') {
             $state = 'terabox';
         } elseif ($video->video_url === 'processing') {
@@ -459,7 +387,7 @@ class VideoUploadController extends Controller
 
         if ($streams !== []) {
             $allCopyable = collect($streams)->every(fn ($s) => in_array(strtolower($s['codec'] ?? ''), ['aac', 'mp3'], true));
-            $tmpDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pd_audio_' . uniqid('', true);
+            $tmpDir = media_temp_dir() . DIRECTORY_SEPARATOR . 'pd_audio_' . uniqid('', true);
             @mkdir($tmpDir, 0777, true);
 
             $processArgs = [$ffmpeg, '-y', '-nostdin', '-loglevel', 'error', '-i', $absolutePath];
@@ -626,7 +554,7 @@ class VideoUploadController extends Controller
 
         $jobs = [];
         foreach ($targets as $height) {
-            $tmpFile = tempnam(sys_get_temp_dir(), 'pd_q_') . '.mp4';
+            $tmpFile = media_temp_dir() . DIRECTORY_SEPARATOR . 'pd_q_' . uniqid('', true) . '.mp4';
 
             $args = [
                 $ffmpeg, '-y', '-nostdin', '-loglevel', 'error',
@@ -815,6 +743,9 @@ class VideoUploadController extends Controller
             'total' => $data['total'] ?? 0,
             'percent' => $data['percent'] ?? 0,
             'phase' => $data['phase'] ?? null,
+            'offset' => $data['offset'] ?? 0,
+            'chunked_speed' => $data['chunked_speed'] ?? 0,
+            'chunked_eta' => $data['chunked_eta'] ?? 0,
             'updated_at' => $data['updated_at'] ?? null,
         ]);
     }
@@ -857,17 +788,40 @@ class VideoUploadController extends Controller
                 continue;
             }
 
+            $size = (int) filesize($file);
+            if ($size < 1) {
+                continue;
+            }
+
+            // Read only the tail of the file so repeated polls stay O(1)
+            // regardless of how large today's log has grown.
+            $readBytes = min($size, 512 * 1024);
             $fh = @fopen($file, 'r');
             if (! $fh) {
                 continue;
             }
 
-            while (($line = fgets($fh)) !== false) {
+            fseek($fh, $size - $readBytes);
+            $tail = fread($fh, $readBytes);
+            fclose($fh);
+
+            if ($tail === false || $tail === '') {
+                continue;
+            }
+
+            $tailLines = preg_split('/\R/', $tail);
+
+            // Drop the first fragment when it starts mid-line (we seeked into
+            // the file, so the leading line is almost always partial).
+            if ($readBytes < $size && count($tailLines) > 1) {
+                array_shift($tailLines);
+            }
+
+            foreach ($tailLines as $line) {
                 if (str_contains($line, $needle)) {
                     $lines[] = $this->parseLogLine($line);
                 }
             }
-            fclose($fh);
         }
 
         return array_slice($lines, -$limit);

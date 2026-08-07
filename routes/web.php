@@ -16,6 +16,7 @@ Route::get('/stream/direct/{video}', [VideoController::class, 'streamDirect'])->
 
 Route::get('/stream/pixeldrain/{video}', [VideoController::class, 'streamPixeldrain'])->name('video.stream.pixeldrain');
 Route::get('/stream/pixeldrain/{video}/audio/{audioId}', [VideoController::class, 'streamPixeldrainAudio'])->name('video.stream.pixeldrain.audio');
+Route::get('/stream/pixeldrain/{video}/subtitle/{subtitle}', [VideoController::class, 'streamPixeldrainSubtitle'])->name('video.stream.pixeldrain.subtitle');
 Route::get('/stream/pixeldrain/{video}/quality/{variant}', [VideoController::class, 'streamPixeldrainVariant'])->name('video.stream.pixeldrain.quality');
 Route::get('/stream/pixeldrain/{video}/quality/{variant}/audio/{audioId}', [VideoController::class, 'streamPixeldrainVariantAudio'])->name('video.stream.pixeldrain.quality.audio');
 Route::get('/stream/720/{video}', [VideoController::class, 'stream720'])->name('video.stream.transcode');

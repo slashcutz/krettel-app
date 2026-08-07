@@ -39,7 +39,7 @@
                         </div>
                         <div>
                             <h2 class="font-bold text-white leading-tight" x-text="syncing ? ('Syncing to Pixeldrain: ' + fileName) : ('Uploading: ' + fileName)"></h2>
-                            <p class="text-xs text-zinc-400" x-text="syncing ? 'Pushing to Pixeldrain cloud. Keep this window open.' : 'Please keep this window open.'"></p>
+                            <p class="text-xs text-zinc-400" x-text="syncing ? (syncPhase || 'Pushing to Pixeldrain cloud. Keep this window open.') : 'Please keep this window open.'"></p>
                         </div>
                     </div>
 
@@ -192,15 +192,17 @@
                 syncProgress: 0,
                 syncUploaded: 0,
                 syncTotal: 0,
+                syncPhase: '',
                 syncLastLoaded: 0,
                 syncLastTime: 0,
                 syncSpeed: '--',
                 syncEta: 'calculating...',
                 syncPollTimer: null,
+                storageChoice: '',
 
                 init() {
                     window.addEventListener('message', (event) => {
-                        if (event.data && event.data.type === 'START_UPLOAD') {
+                        if (event.source === window.opener && event.data && event.data.type === 'START_UPLOAD') {
                             this.startUpload(event.data.action, event.data.formData, event.data.fileName, event.data.storageChoice);
                         }
                     });

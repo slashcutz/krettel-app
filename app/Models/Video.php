@@ -35,4 +35,9 @@ class Video extends Model
     {
         return $this->belongsToMany(Genre::class, 'genre_video');
     }
+
+    public function subtitles()
+    {
+        return $this->hasMany(Subtitle::class);
+    }
 }

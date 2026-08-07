@@ -82,6 +82,36 @@ class MediaProbe
     }
 
     /**
+     * Return subtitle stream metadata: input index, language tag, title, codec.
+     */
+    public static function subtitleStreams(string $path): array
+    {
+        $streams = static::streams($path);
+        if (! $streams) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($streams as $stream) {
+            if (($stream['codec_type'] ?? null) !== 'subtitle') {
+                continue;
+            }
+
+            $out[] = [
+                'index' => (int) ($stream['index'] ?? count($out)),
+                'codec' => $stream['codec_name'] ?? null,
+                'language' => isset($stream['tags']['language'])
+                    ? strtolower((string) $stream['tags']['language'])
+                    : null,
+                'title' => isset($stream['tags']['title']) ? (string) $stream['tags']['title'] : null,
+                'default' => ($stream['disposition']['default'] ?? 0) === 1,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Return container/format metadata (ffprobe -show_format) or null.
      */
     public static function format(string $path): ?array

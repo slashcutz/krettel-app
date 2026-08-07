@@ -6,6 +6,8 @@ use App\Models\Video;
 use App\Models\VideoAudioTrack;
 use App\Support\LanguageCodes;
 use App\Support\MediaProbe;
+use App\Support\SubtitleExtractor;
+use App\Support\VideoEncoder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -42,6 +44,15 @@ class TranscodeVideoToHls implements ShouldQueue
 
         $audioStreams = MediaProbe::audioStreams($absolutePath);
         $videoCodec = MediaProbe::videoCodec($absolutePath);
+
+        // Embedded caption streams ride along with the source file — pull them
+        // out into WebVTT so the player can offer them. Best-effort; a missing
+        // ffmpeg or broken stream just means no captions for this video.
+        try {
+            SubtitleExtractor::extractToPublicDisk($this->video, $absolutePath);
+        } catch (\Throwable $e) {
+            $log('Subtitle extraction skipped.', ['error' => $e->getMessage()]);
+        }
 
         // Separately uploaded audio files (VideoAudioTrack rows) become extra
         // audio renditions, so a single-audio MKV + 1 extra file = 2 tracks.
@@ -92,7 +103,14 @@ class TranscodeVideoToHls implements ShouldQueue
 
             $tracks = $this->audioTracks($audioStreams, $extraFiles);
             $names = $this->audioNames($tracks);
-            $process = $this->buildProcess($absolutePath, $outDir, $videoCodec, $tracks, $names, $extraFiles);
+
+            // When every muxed track is already AAC/MP3 (and there are no
+            // separate audio files) the audio can be stream-copied — a large
+            // speedup since audio no longer has to be re-encoded at all.
+            $copyAudio = $extraFiles === [] && $audioStreams !== [] &&
+                collect($audioStreams)->every(fn ($s) => in_array(strtolower($s['codec'] ?? ''), ['aac', 'mp3'], true));
+
+            $process = $this->buildProcess($absolutePath, $outDir, $videoCodec, $tracks, $names, $extraFiles, $copyAudio);
             $process->setTimeout($this->timeout);
             $process->run();
 
@@ -183,7 +201,7 @@ class TranscodeVideoToHls implements ShouldQueue
         return $names;
     }
 
-    protected function buildProcess(string $input, string $outDir, ?string $videoCodec, array $tracks, array $names, array $extraFiles): Process
+    protected function buildProcess(string $input, string $outDir, ?string $videoCodec, array $tracks, array $names, array $extraFiles, bool $copyAudio = false): Process
     {
         $args = [config('ffmpeg.ffmpeg'), '-y', '-i', $input];
 
@@ -197,19 +215,23 @@ class TranscodeVideoToHls implements ShouldQueue
         }
 
         // Copy the video when it's already H.264 (fast); re-encode otherwise
-        // so every device (incl. iOS native HLS) can play the output.
+        // so every device (incl. iOS native HLS) can play the output. The
+        // re-encode uses the fastest usable encoder (hardware when available).
         if (in_array($videoCodec, ['h264', 'avc1'], true)) {
             $args[] = '-c:v'; $args[] = 'copy';
         } else {
-            $args[] = '-c:v'; $args[] = 'libx264';
-            $args[] = '-preset'; $args[] = 'veryfast';
-            $args[] = '-crf'; $args[] = '23';
+            $args = array_merge($args, VideoEncoder::args('veryfast', 23));
             $args[] = '-pix_fmt'; $args[] = 'yuv420p';
         }
 
-        $args[] = '-c:a'; $args[] = 'aac';
-        $args[] = '-b:a'; $args[] = '160k';
-        $args[] = '-ac'; $args[] = '2';
+        if ($copyAudio) {
+            // Remux-only audio: near-instant, keeps original quality.
+            $args[] = '-c:a'; $args[] = 'copy';
+        } else {
+            $args[] = '-c:a'; $args[] = 'aac';
+            $args[] = '-b:a'; $args[] = '160k';
+            $args[] = '-ac'; $args[] = '2';
+        }
 
         foreach ($tracks as $k => $track) {
             $args[] = '-metadata'; $args[] = 's:a:' . $k . '=language=' . ($track['language'] ?: 'und');

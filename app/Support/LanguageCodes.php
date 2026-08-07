@@ -46,6 +46,23 @@ class LanguageCodes
     }
 
     /**
+     * Convert a 3-letter code (e.g. "eng", "HIN") back to its display name,
+     * or null when the code isn't known.
+     */
+    public static function name(string $code): ?string
+    {
+        $code = strtolower(trim($code));
+
+        foreach (self::NAMES as $display => $c) {
+            if ($c === $code) {
+                return $display;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Convert a display name (e.g. "English" or "English (CC)") to a 3-letter
      * code. Falls back to the first three characters, then to 'und'.
      */

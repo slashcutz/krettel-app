@@ -35,7 +35,7 @@ class TeraBoxImageSeeder extends Seeder
         $remotePaths = [];
 
         foreach ($sources as $index => $url) {
-            $tmp = tempnam(sys_get_temp_dir(), 'tbimg');
+            $tmp = media_temp_dir() . DIRECTORY_SEPARATOR . 'tbimg_' . uniqid('', true);
 
             try {
                 $bytes = @file_get_contents($url);

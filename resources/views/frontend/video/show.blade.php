@@ -84,6 +84,7 @@
                     speed: 1,
                     volume: 1,
                     captionsOn: false,
+                    hasSubtitles: {{ $subtitleTracks->isEmpty() ? 'false' : 'true' }},
                     videoError: null,
                     watchTimeAccumulated: 0,
                     quality: -1,
@@ -98,6 +99,21 @@
                     isDirectStream: false,
                     streamQuality: '480',
                     downloadMode: null,
+                    pinchScale: 1,
+                    pinchTx: 0,
+                    pinchTy: 0,
+                    pinchOx: 0,
+                    pinchOy: 0,
+                    pinchStartDist: 0,
+                    pinchBaseScale: 1,
+                    pinchActive: false,
+                    pinchPanning: false,
+                    pinchPanStartX: 0,
+                    pinchPanStartY: 0,
+                    pinchPanStartTx: 0,
+                    pinchPanStartTy: 0,
+                    lastTapTime: 0,
+                    pinchSuppressClick: false,
 
                     initPlayer() {
                         this.volume = this.$refs.video.volume;
@@ -110,6 +126,9 @@
                         setInterval(() => {
                             this.syncWatchTime();
                         }, 10000);
+
+                        // YouTube-style pinch zoom / double-tap on mobile
+                        this.initPinchZoom();
 
                         // Set duration once metadata is loaded
                         this.$refs.video.addEventListener('loadedmetadata', () => {
@@ -505,6 +524,11 @@
                     },
 
                     onVideoClick() {
+                        if (this.pinchActive || this.pinchPanning || this.pinchSuppressClick) {
+                            this.pinchPanning = false;
+                            this.pinchSuppressClick = false;
+                            return;
+                        }
                         this.togglePlay();
                         if (this.isFullscreen) {
                             // In fullscreen a click toggles the controls:
@@ -604,6 +628,7 @@
                     },
 
                     toggleCaptions() {
+                        if (!this.hasSubtitles) return;
                         this.captionsOn = !this.captionsOn;
                         this.$refs.video.textTracks.forEach((track) => {
                             track.mode = this.captionsOn ? 'showing' : 'hidden';
@@ -614,6 +639,144 @@
                     isMobileOrTablet() {
                         return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
                             || (navigator.maxTouchPoints > 0 && window.matchMedia('(max-width: 1024px)').matches);
+                    },
+
+                    initPinchZoom() {
+                        // Touch handlers are wired via Alpine events on the <video>
+                        // element; nothing to attach here, but keeping the method
+                        // documents intent and gives a hook for future listeners.
+                    },
+
+                    pinchTouchDist(touches) {
+                        const a = touches[0];
+                        const b = touches[1];
+                        return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                    },
+
+                    pinchTouchMid(touches) {
+                        const rect = this.$refs.video.getBoundingClientRect();
+                        const a = touches[0];
+                        const b = touches[1];
+                        return {
+                            x: (a.clientX + b.clientX) / 2 - rect.left,
+                            y: (a.clientY + b.clientY) / 2 - rect.top,
+                        };
+                    },
+
+                    applyPinchTransform() {
+                        const video = this.$refs.video;
+                        if (!video) return;
+                        if (this.pinchScale <= 1 && this.pinchTx === 0 && this.pinchTy === 0) {
+                            video.style.transform = '';
+                            video.style.transformOrigin = '';
+                            video.style.touchAction = '';
+                        } else {
+                            video.style.transformOrigin = this.pinchOx + 'px ' + this.pinchOy + 'px';
+                            video.style.transform = 'translate(' + this.pinchTx + 'px, ' + this.pinchTy + 'px) scale(' + this.pinchScale + ')';
+                            video.style.touchAction = 'none';
+                        }
+                    },
+
+                    resetPinch() {
+                        this.pinchScale = 1;
+                        this.pinchTx = 0;
+                        this.pinchTy = 0;
+                        this.pinchActive = false;
+                        this.pinchStartDist = 0;
+                        this.pinchPanning = false;
+                        this.pinchSuppressClick = false;
+                        this.applyPinchTransform();
+                    },
+
+                    onVideoTouchStart(e) {
+                        const video = this.$refs.video;
+                        if (!video) return;
+
+                        if (e.touches.length >= 2) {
+                            this.pinchActive = true;
+                            this.pinchPanning = false;
+                            this.pinchStartDist = this.pinchTouchDist(e.touches);
+                            this.pinchBaseScale = this.pinchScale;
+                            const mid = this.pinchTouchMid(e.touches);
+                            this.pinchOx = mid.x;
+                            this.pinchOy = mid.y;
+                            video.style.touchAction = 'none';
+                            e.preventDefault();
+                        } else if (e.touches.length === 1) {
+                            this.pinchPanStartX = e.touches[0].clientX;
+                            this.pinchPanStartY = e.touches[0].clientY;
+                            this.pinchPanStartTx = this.pinchTx;
+                            this.pinchPanStartTy = this.pinchTy;
+                        }
+                    },
+
+                    onVideoTouchMove(e) {
+                        const video = this.$refs.video;
+                        if (!video) return;
+
+                        if (this.pinchActive && e.touches.length >= 2) {
+                            const dist = this.pinchTouchDist(e.touches);
+                            const base = this.pinchStartDist || 1;
+                            const scale = Math.max(1, Math.min(3, this.pinchBaseScale * (dist / base)));
+                            this.pinchScale = scale;
+                            const mid = this.pinchTouchMid(e.touches);
+                            this.pinchOx = mid.x;
+                            this.pinchOy = mid.y;
+                            if (scale <= 1) {
+                                this.pinchTx = 0;
+                                this.pinchTy = 0;
+                            }
+                            this.applyPinchTransform();
+                            e.preventDefault();
+                        } else if (e.touches.length === 1 && this.pinchScale > 1) {
+                            const dx = e.touches[0].clientX - this.pinchPanStartX;
+                            const dy = e.touches[0].clientY - this.pinchPanStartY;
+                            if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+                                this.pinchPanning = true;
+                            }
+                            this.pinchTx = this.pinchPanStartTx + dx;
+                            this.pinchTy = this.pinchPanStartTy + dy;
+                            this.applyPinchTransform();
+                            e.preventDefault();
+                        }
+                    },
+
+                    onVideoTouchEnd(e) {
+                        const video = this.$refs.video;
+                        if (!video) return;
+
+                        if (this.pinchActive && e.touches.length < 2) {
+                            this.pinchActive = false;
+                            this.pinchStartDist = 0;
+                            if (this.pinchScale <= 1) {
+                                this.pinchTx = 0;
+                                this.pinchTy = 0;
+                                this.pinchPanning = false;
+                                this.applyPinchTransform();
+                            }
+                            return;
+                        }
+
+                        if (e.touches.length === 0 && this.isMobileOrTablet()) {
+                            const now = Date.now();
+                            const isDoubleTap = (now - this.lastTapTime) < 350;
+                            this.lastTapTime = now;
+
+                            if (isDoubleTap) {
+                                this.pinchSuppressClick = true;
+                                if (this.pinchScale > 1) {
+                                    this.resetPinch();
+                                } else {
+                                    const rect = video.getBoundingClientRect();
+                                    this.pinchOx = Math.max(0, e.changedTouches[0].clientX - rect.left);
+                                    this.pinchOy = Math.max(0, e.changedTouches[0].clientY - rect.top);
+                                    this.pinchScale = 2.5;
+                                    this.pinchTx = 0;
+                                    this.pinchTy = 0;
+                                    this.applyPinchTransform();
+                                }
+                            }
+                        }
                     },
 
                     rotateToLandscape() {
@@ -632,6 +795,8 @@
                     toggleFullscreen() {
                         const container = this.$refs.videoContainer;
                         if (!container) return;
+
+                        this.resetPinch();
 
                         if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                             if (this.miniPlayer) this.miniPlayer = false;
@@ -662,6 +827,7 @@
 
                     toggleMiniPlayer() {
                         this.miniPlayer = !this.miniPlayer;
+                        this.resetPinch();
                         if (this.miniPlayer) {
                             const doc = document;
                             if (doc.fullscreenElement || doc.webkitFullscreenElement) {
@@ -899,7 +1065,7 @@
             @endphp
             <div class="transition-all duration-300 ease-in-out"
                  :class="miniPlayer ? 'fixed z-[60] bottom-20 sm:bottom-4 inset-x-0 sm:inset-x-auto sm:right-4 w-full sm:w-96 px-3 sm:px-0' : 'w-full lg:px-4 lg:pt-4'">
-            <div class="w-full bg-black flex justify-center items-center relative shadow-2xl video-container"
+            <div class="w-full bg-black flex justify-center items-center relative shadow-2xl video-container overflow-hidden"
                  x-ref="videoContainer"
                  :class="{
                     'aspect-video': !isFullscreen,
@@ -930,14 +1096,17 @@
                     preload="auto"
                     poster="{{ $posterUrl }}"
                     @click="onVideoClick()"
-                    @dblclick="toggleFullscreen()"
+                    @dblclick="isMobileOrTablet() ? null : toggleFullscreen()"
+                    @touchstart="onVideoTouchStart($event)"
+                    @touchmove="onVideoTouchMove($event)"
+                    @touchend="onVideoTouchEnd($event)"
                     @timeupdate="updateProgress()"
                     @ended="isPlaying = false"
                 >
-                    <source src="{{ ($video['video_url'] ?? null) === 'terabox-remote' ? route('video.stream', $video->id) : ($streamUrl ?? $video['video_url'] ?? 'https://vjs.zencdn.net/v/oceans.mp4') }}" type="{{ ($video['video_url'] ?? null) === 'terabox-remote' ? 'application/x-mpegURL' : 'video/mp4' }}" />
-                    @if(!empty($video->subtitle))
-                    <track kind="captions" label="Captions" src="{{ $video->subtitle }}" srclang="en" />
-                    @endif
+                    <source src="{{ ($video['video_url'] ?? null) === 'terabox-remote' ? route('video.stream', $video->id) : ($streamUrl ?? $video['video_url'] ?? 'https://vjs.zencdn.net/v/oceans.mp4') }}" type="{{ $streamMime ?? 'video/mp4' }}" />
+                    @foreach($subtitleTracks as $subtitleTrack)
+                    <track kind="captions" label="{{ $subtitleTrack['label'] }}" src="{{ $subtitleTrack['src'] }}" srclang="{{ $subtitleTrack['srclang'] }}" @if($subtitleTrack['default']) default @endif />
+                    @endforeach
                 </video>
 
                 <!-- Buffering Overlay -->
@@ -964,7 +1133,9 @@
                         <div class="flex items-center space-x-3 relative text-white/90">
                             <!-- CC / Captions Button -->
                             <button @click.stop="toggleCaptions()" class="p-1.5 hover:bg-white/10 rounded-full transition focus:outline-none"
-                                    :class="{ 'text-primary': captionsOn }">
+                                    :class="{ 'text-primary': captionsOn }"
+                                    x-show="hasSubtitles"
+                                    :disabled="!hasSubtitles">
                                 <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h18a2 2 0 012 2v10a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2zm4 9H5v-2h2v2zm6 0h-2v-2h2v2zm6 0h-2v-2h2v2z"></path></svg>
                             </button>
 
@@ -1137,7 +1308,8 @@
                 </div>
 
                 <!-- Progress Bar at absolute bottom (with taller h-8 touch target for mobile responsiveness) -->
-                <div class="absolute bottom-0 left-0 right-0 h-8 z-30 pointer-events-auto group/progress flex items-end cursor-pointer"
+                <div class="absolute bottom-0 left-0 right-0 h-8 z-30 pointer-events-auto group/progress flex items-end cursor-pointer transition-opacity duration-300"
+                     :class="isPlaying && !showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'"
                      @mousedown.prevent="startDrag($event)"
                      @touchstart.prevent="startDrag($event.touches[0])">
                     <div class="progress-bar-container w-full m-0 h-[6px] group-hover/progress:h-2 rounded-none bg-zinc-800" x-ref="progressContainer">
@@ -1184,13 +1356,21 @@
 
                                     <!-- Metadata Bar -->
                                     <div class="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs text-zinc-400 mt-2 font-medium">
-                                        <span>{{ $video->release_year ?? '2026' }}</span>
+                                        @if($video->release_date)
+                                        <span>{{ \Illuminate\Support\Carbon::parse($video->release_date)->format('Y') }}</span>
                                         <span>•</span>
-                                        <span class="bg-red-600 text-white font-bold px-1.5 py-0.5 rounded text-[10px]">{{ $video->age_rating ?? '18+' }}</span>
+                                        @endif
+                                        @if($video->age_rating)
+                                        <span class="bg-red-600 text-white font-bold px-1.5 py-0.5 rounded text-[10px]">{{ $video->age_rating }}</span>
                                         <span>•</span>
-                                        <span>{{ $video->duration ?? '2h 18m' }}</span>
+                                        @endif
+                                        @if($video->duration)
+                                        <span>{{ gmdate('H', $video->duration) > 0 ? intval(gmdate('H', $video->duration)) . 'h ' . intval(gmdate('i', $video->duration)) . 'm' : intval(gmdate('i', $video->duration)) . 'm' }}</span>
                                         <span>•</span>
-                                        <span class="border border-zinc-700 text-zinc-300 text-[10px] px-1 rounded font-bold">4K HDR</span>
+                                        @endif
+                                        @if($video->quality || $video->resolution)
+                                        <span class="border border-zinc-700 text-zinc-300 text-[10px] px-1 rounded font-bold">{{ collect([$video->quality, $video->resolution])->filter()->implode(' ') }}</span>
+                                        @endif
                                         @if($video->views)
                                         <span>•</span>
                                         <span class="text-zinc-500">{{ number_format($video->views) }} views</span>
@@ -1221,14 +1401,11 @@
                             </p>
                         </div>
 
-                        <!-- Right Column: Cast/Genres -->
+                        <!-- Right Column: Video Details -->
                         <div class="w-full lg:w-80 flex-shrink-0 space-y-5 text-sm bg-zinc-900/60 backdrop-blur-md p-6 rounded-2xl border border-zinc-800 shadow-xl">
+                            @if($video->category || ($video->tags && trim($video->tags)))
                             <div class="flex flex-col">
-                                <span class="text-zinc-500 font-semibold mb-1">Cast</span> 
-                                <span class="text-white leading-relaxed">{{ $video->cast ?? 'Tom Hardy, Charlize Theron, Nicholas Hoult' }}</span>
-                            </div>
-                            <div class="flex flex-col">
-                                <span class="text-zinc-500 font-semibold mb-1">Genres</span> 
+                                <span class="text-zinc-500 font-semibold mb-1">Genres</span>
                                 <div class="flex flex-wrap gap-2 mt-1">
                                     @if($video->category)
                                     <a href="{{ route('category.show', $video->category->slug) }}" class="text-white bg-zinc-800 hover:bg-primary transition-colors px-3 py-1 rounded-full text-xs font-medium">{{ $video->category->name }}</a>
@@ -1237,16 +1414,52 @@
                                         @foreach(explode(',', $video->tags) as $tag)
                                         <a href="{{ route('search.index', ['q' => trim($tag)]) }}" class="text-white bg-zinc-800 hover:bg-primary transition-colors px-3 py-1 rounded-full text-xs font-medium">{{ trim($tag) }}</a>
                                         @endforeach
-                                    @else
-                                        <a href="#" class="text-white bg-zinc-800 hover:bg-primary transition-colors px-3 py-1 rounded-full text-xs font-medium">Action</a>
-                                        <a href="#" class="text-white bg-zinc-800 hover:bg-primary transition-colors px-3 py-1 rounded-full text-xs font-medium">Sci-Fi</a>
                                     @endif
                                 </div>
                             </div>
+                            @endif
+
+                            @if($video->language)
                             <div class="flex flex-col">
-                                <span class="text-zinc-500 font-semibold mb-1">Director</span> 
-                                <span class="text-white">{{ $video->director ?? 'George Miller' }}</span>
+                                <span class="text-zinc-500 font-semibold mb-1">Language</span>
+                                <span class="text-white">{{ $video->language->name }}</span>
                             </div>
+                            @endif
+
+                            @if($video->quality || $video->resolution)
+                            <div class="flex flex-col">
+                                <span class="text-zinc-500 font-semibold mb-1">Quality</span>
+                                <span class="text-white">{{ collect([$video->quality, $video->resolution])->filter()->implode(' · ') }}</span>
+                            </div>
+                            @endif
+
+                            @if($video->codec || $video->bitrate)
+                            <div class="flex flex-col">
+                                <span class="text-zinc-500 font-semibold mb-1">Codec</span>
+                                <span class="text-white">{{ collect([$video->codec, $video->bitrate])->filter()->implode(' · ') }}</span>
+                            </div>
+                            @endif
+
+                            @if($video->video_type)
+                            <div class="flex flex-col">
+                                <span class="text-zinc-500 font-semibold mb-1">Type</span>
+                                <span class="text-white capitalize">{{ $video->video_type }}</span>
+                            </div>
+                            @endif
+
+                            @if($video->age_rating)
+                            <div class="flex flex-col">
+                                <span class="text-zinc-500 font-semibold mb-1">Age Rating</span>
+                                <span class="text-white">{{ $video->age_rating }}</span>
+                            </div>
+                            @endif
+
+                            @if($video->release_date)
+                            <div class="flex flex-col">
+                                <span class="text-zinc-500 font-semibold mb-1">Release Date</span>
+                                <span class="text-white">{{ \Illuminate\Support\Carbon::parse($video->release_date)->format('M d, Y') }}</span>
+                            </div>
+                            @endif
                         </div>
                     </div>
                 </div>

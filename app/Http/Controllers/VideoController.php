@@ -15,7 +15,7 @@ class VideoController extends Controller
 {
     public function show($slug)
     {
-        $video = Video::with('category')->where('slug', $slug)->firstOrFail();
+        $video = Video::with('category', 'subtitles.language')->where('slug', $slug)->firstOrFail();
 
         $relatedVideos = Video::where('category_id', $video->category_id)
             ->where('id', '!=', $video->id)
@@ -74,6 +74,35 @@ class VideoController extends Controller
 
         $streamUrl = static::resolveStreamUrl($video);
 
+        // Advertise the correct <source> mime so browsers pick the right
+        // demuxer (HLS playlist vs MP4 vs MKV) instead of guessing from a
+        // hardcoded video/mp4, which causes slow seeks on large files.
+        $streamMime = 'video/mp4';
+        if ($video->hls_status === 'ready' && $video->hls_folder) {
+            $streamMime = 'application/x-mpegURL';
+        } elseif ($video->video_url === 'terabox-remote') {
+            $streamMime = 'application/x-mpegURL';
+        } elseif ($video->storage_provider === 'pixeldrain' && $video->storage_folder) {
+            $fileName = static::pixeldrainFileName($video->storage_folder);
+            if ($fileName) {
+                $streamMime = static::mimeForPath($fileName);
+            }
+        }
+
+        // Subtitle tracks for the player: local files are served straight from
+        // the public disk, Pixeldrain-hosted ones through the proxy route.
+        $subtitleTracks = $video->subtitles->map(function (\App\Models\Subtitle $subtitle) use ($video) {
+            return [
+                'id' => $subtitle->id,
+                'label' => $subtitle->label ?: ($subtitle->language->name ?? 'Captions'),
+                'srclang' => $subtitle->language->code ?? 'en',
+                'src' => str_starts_with($subtitle->file_path, 'pixeldrain://')
+                    ? route('video.stream.pixeldrain.subtitle', ['video' => $video->id, 'subtitle' => $subtitle->id])
+                    : \Illuminate\Support\Facades\Storage::disk('public')->url($subtitle->file_path),
+                'default' => (bool) $subtitle->is_default,
+            ];
+        })->values();
+
         $pixeldrainAudioTracks = collect();
         $pixeldrainQualityVariants = collect();
         if ($video->storage_provider === 'pixeldrain') {
@@ -88,7 +117,7 @@ class VideoController extends Controller
                 ->get();
         }
 
-        return view('frontend.video.show', compact('video', 'relatedVideos', 'recentlyWatched', 'streamUrl', 'inMyList', 'pixeldrainAudioTracks', 'pixeldrainQualityVariants'));
+        return view('frontend.video.show', compact('video', 'relatedVideos', 'recentlyWatched', 'streamUrl', 'streamMime', 'inMyList', 'pixeldrainAudioTracks', 'pixeldrainQualityVariants', 'subtitleTracks'));
     }
 
     /**
@@ -341,10 +370,44 @@ class VideoController extends Controller
             abort(404);
         }
 
+        // The pixeldrain file id carries no extension, so resolve the real
+        // container name once (cached) and serve the matching Content-Type.
+        // Serving an MKV as video/mp4 makes browsers pick the wrong demuxer
+        // and seek slowly (or re-download from the start) on large files.
+        $fileName = static::pixeldrainFileName($video->storage_folder);
+
         return $this->proxyPixeldrainFile(
             $video->storage_folder,
-            static::mimeForPath($video->storage_folder)
+            $fileName ? static::mimeForPath($fileName) : 'video/mp4'
         );
+    }
+
+    /**
+     * Resolve the original filename of a Pixeldrain file via its API and cache
+     * it, so stream responses can advertise the correct container/mime type.
+     */
+    protected static function pixeldrainFileName(string $fileId): ?string
+    {
+        $cacheKey = 'pd_file_name_' . $fileId;
+        $cached = Cache::store('file')->get($cacheKey);
+
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        try {
+            $info = app(\App\Services\PixeldrainClient::class)->getFileInfo($fileId);
+            $name = $info['name'] ?? null;
+
+            if (is_string($name) && $name !== '') {
+                Cache::store('file')->put($cacheKey, $name, now()->addDay());
+                return $name;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[PIXELDRAIN-STREAM] getFileInfo failed for ' . $fileId . ': ' . $e->getMessage());
+        }
+
+        return null;
     }
 
     /**
@@ -384,6 +447,8 @@ class VideoController extends Controller
         $meta = static::parseStreamMeta($stream, $contentType);
 
         return response()->stream(function () use ($stream) {
+            @ini_set('max_execution_time', '0');
+            @ini_set('default_socket_timeout', '0');
             if (function_exists('apache_setenv')) {
                 @apache_setenv('no-gzip', 1);
             }
@@ -414,7 +479,26 @@ class VideoController extends Controller
     }
 
     /**
-     * Re-mux the Pixeldrain-hosted video with a chosen split audio track and
+     * Proxy a subtitle (.vtt) file stored on Pixeldrain through our server.
+     * Subtitle rows created by the media processor use a `pixeldrain://<id>`
+     * file_path; the player loads this route as the <track> src.
+     */
+    public function streamPixeldrainSubtitle(Video $video, \App\Models\Subtitle $subtitle)
+    {
+        if ($video->storage_provider !== 'pixeldrain' || $subtitle->video_id !== $video->id) {
+            abort(404);
+        }
+
+        $fileId = $subtitle->file_path;
+        if (! str_starts_with($fileId, 'pixeldrain://')) {
+            abort(404);
+        }
+
+        return $this->proxyPixeldrainFile(substr($fileId, strlen('pixeldrain://')), 'text/vtt; charset=utf-8');
+    }
+
+    /**
+     * Re-mux a Pixeldrain-hosted video with a chosen split audio track and
      * stream the result as fragmented MP4.
      *
      * The video is fetched from Pixeldrain, the selected audio track from
@@ -611,6 +695,8 @@ class VideoController extends Controller
 
                 return response()->stream(function () use ($stream) {
                     // Disable limits and compression
+                    @ini_set('max_execution_time', '0');
+                    @ini_set('default_socket_timeout', '0');
                     if (function_exists('apache_setenv')) {
                         @apache_setenv('no-gzip', 1);
                     }
@@ -814,6 +900,9 @@ class VideoController extends Controller
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'Pragma' => 'no-cache',
             'Expires' => '0',
+            // Tell nginx to pass proxied bytes through immediately instead of
+            // buffering the whole upstream body, so seeks start instantly.
+            'X-Accel-Buffering' => 'no',
         ];
 
         if ($contentLength !== null) {

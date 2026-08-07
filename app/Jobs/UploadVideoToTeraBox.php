@@ -46,6 +46,15 @@ class UploadVideoToTeraBox implements ShouldQueue
                 throw new RuntimeException('Staging file not found: ' . $absolutePath);
             }
 
+            // Embedded caption streams come with the source file — extract them
+            // to WebVTT on the public disk so the player can offer them. This
+            // runs best-effort; failure never blocks the TeraBox upload.
+            try {
+                \App\Support\SubtitleExtractor::extractToPublicDisk($this->video, $absolutePath);
+            } catch (\Throwable $e) {
+                Log::channel('krettel')->warning('[TERABOX-SYNC] Subtitle extraction skipped for video ' . $this->video->id . ': ' . $e->getMessage());
+            }
+
             $remoteDir = config('terabox.remote_dir', '/Apps/Krettel');
             $filename = basename($this->stagingPath);
 
