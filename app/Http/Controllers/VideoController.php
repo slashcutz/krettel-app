@@ -391,6 +391,10 @@ class VideoController extends Controller
         $cacheKey = 'pd_file_name_' . $fileId;
         $cached = Cache::store('file')->get($cacheKey);
 
+        if ($cached === 'UNKNOWN') {
+            return null;
+        }
+
         if (is_string($cached) && $cached !== '') {
             return $cached;
         }
@@ -407,6 +411,8 @@ class VideoController extends Controller
             Log::warning('[PIXELDRAIN-STREAM] getFileInfo failed for ' . $fileId . ': ' . $e->getMessage());
         }
 
+        // Cache the failure for 15 minutes to prevent blocking every page load
+        Cache::store('file')->put($cacheKey, 'UNKNOWN', now()->addMinutes(15));
         return null;
     }
 

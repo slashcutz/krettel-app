@@ -610,7 +610,7 @@
                             const chunk = videoFile.slice(start, end);
 
                             const chunkData = new FormData();
-                            chunkData.append('chunk', chunk);
+                            chunkData.append('chunk', chunk, videoFile.name);
                             chunkData.append('chunk_index', currentChunk);
                             chunkData.append('total_chunks', totalChunks);
                             chunkData.append('upload_token', uploadToken);
