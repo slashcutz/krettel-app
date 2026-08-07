@@ -653,6 +653,7 @@
 
                             const handleChunkError = () => {
                                 retryCount++;
+                                this.mobileStatus = 'Network error (Code ' + xhr.status + '). Retrying chunk ' + (currentChunk + 1) + ' (' + retryCount + '/' + maxRetries + ')...';
                                 if (retryCount > maxRetries) {
                                     this.mobileUploading = false;
                                     Swal.fire({

@@ -90,6 +90,7 @@ class PixeldrainClient
     {
         $response = $this->http->request('GET', $this->baseUrl() . '/api/file/' . $id . '/info', [
             'auth' => $this->auth(),
+            'timeout' => 1.5, // Strict timeout to prevent blocking page loads!
         ]);
 
         $body = json_decode((string) $response->getBody(), true);
