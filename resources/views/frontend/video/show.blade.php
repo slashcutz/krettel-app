@@ -18,8 +18,21 @@
         
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         
-        <script>
-            document.addEventListener('alpine:init', () => {
+        @push('scripts')
+    <script>
+        // Eager Loading Script: Fetch the first 5MB of the video immediately 
+        // to warm up the browser cache and ensure lightning-fast playback start.
+        (function() {
+            const streamUrl = "{{ ($video['video_url'] ?? null) === 'terabox-remote' ? route('video.stream', $video->id) : ($streamUrl ?? '') }}";
+            if (streamUrl && streamUrl !== 'processing' && streamUrl !== 'pending-upload') {
+                fetch(streamUrl, {
+                    headers: { 'Range': 'bytes=0-5242880' } // Pre-fetch first 5MB
+                }).catch(e => console.warn('Eager load failed:', e));
+            }
+        })();
+    </script>
+    <script>
+        document.addEventListener('alpine:init', () => {
                 Alpine.data('myListToggle', (videoId = null) => ({
                     videoId: videoId,
                     inList: {{ $inMyList ? 'true' : 'false' }},

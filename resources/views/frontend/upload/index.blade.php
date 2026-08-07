@@ -622,6 +622,8 @@
                             xhr.setRequestHeader('Accept', 'application/json');
                             const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
                             xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+                            
+                            this.mobileStatus = 'Starting chunk ' + (currentChunk + 1) + ' of ' + totalChunks + '...';
 
                             xhr.upload.onprogress = (e) => {
                                 if (e.lengthComputable) {
@@ -653,7 +655,14 @@
                                 retryCount++;
                                 if (retryCount > maxRetries) {
                                     this.mobileUploading = false;
-                                    Swal.fire({ icon: 'error', title: 'Upload Failed', text: 'Connection dropped. Please refresh the page, select the exact same file, and it will instantly resume!', confirmButtonColor: '#e50914', background: '#1a1a1a', color: '#fff' });
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: 'Upload Failed',
+                                        text: 'Connection dropped (Code: ' + xhr.status + '). Please refresh the page, select the exact same file, and it will instantly resume!',
+                                        confirmButtonColor: '#e50914',
+                                        background: '#1a1a1a',
+                                        color: '#fff'
+                                    });
                                 } else {
                                     setTimeout(() => uploadNextChunk(), 3000);
                                 }
