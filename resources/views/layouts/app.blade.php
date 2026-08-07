@@ -50,7 +50,7 @@
             </main>
         </div>
         
-        <footer class="bg-card/50 py-12 mt-12 border-t border-border">
+        <footer class="hidden lg:block bg-card/50 py-12 mt-12 border-t border-border">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-muted">
                 <p>&copy; {{ date('Y') }} Krettel. All rights reserved.</p>
             </div>

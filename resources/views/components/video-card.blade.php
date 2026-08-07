@@ -32,7 +32,8 @@
     }
 @endphp
 
-<a href="{{ route('video.show', data_get($video, 'slug', data_get($video, 'id', 'sample-video'))) }}" class="block group relative overflow-hidden rounded-md cursor-pointer transition-all duration-300 transform hover:scale-105 hover:z-50 hover:shadow-2xl bg-card border border-border/50 aspect-video">
+<a href="{{ route('video.show', data_get($video, 'slug', data_get($video, 'id', 'sample-video'))) }}" class="block group cursor-pointer">
+    <div class="relative overflow-hidden rounded-md transition-all duration-300 transform group-hover:scale-105 group-hover:z-50 group-hover:shadow-2xl bg-card border border-border/50 aspect-video">
     
     <!-- Thumbnail -->
     <img src="{{ $image }}" alt="Video Thumbnail" loading="eager" fetchpriority="high" decoding="async" class="w-full h-full object-cover">
@@ -50,8 +51,8 @@
     </div>
     @endif
 
-    <!-- Hover Info Overlay -->
-    <div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+    <!-- Hover Info Overlay (Desktop only) -->
+    <div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden lg:flex flex-col justify-end p-4">
         <div class="hidden lg:flex items-center space-x-2 mb-2">
             <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black hover:bg-gray-200 transition-colors">
                 <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -75,6 +76,21 @@
             {{ data_get($video, 'title', 'Video Title') }}
         </div>
         <div class="text-gray-400 text-xs truncate mt-1">
+            @if(is_object($video) && $video->category)
+                {{ $video->category->name }}
+            @else
+                {{ data_get($video, 'categories', 'Action • Sci-Fi • Thriller') }}
+            @endif
+        </div>
+    </div>
+    </div>
+
+    <!-- Mobile/Tablet Title (Below Card) -->
+    <div class="mt-2 px-1 block lg:hidden">
+        <div class="text-white text-sm font-bold truncate">
+            {{ data_get($video, 'title', 'Video Title') }}
+        </div>
+        <div class="text-gray-400 text-xs truncate mt-0.5">
             @if(is_object($video) && $video->category)
                 {{ $video->category->name }}
             @else
