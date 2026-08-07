@@ -518,7 +518,8 @@
                     this.mobileLastLoaded = 0;
                     this.mobileLastTime = 0;
 
-                    const videoFile = this.videoFile;
+                    // Pull raw File object directly from DOM to avoid Alpine Proxy wrappers breaking mobile Safari slice()
+                    const videoFile = document.getElementById('video_file_input').files[0] || this.videoFile;
                     const isFileMode = (videoFile && videoFile instanceof File && videoFile.size > 0);
 
                     let uploadToken = '';
