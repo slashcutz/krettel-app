@@ -152,7 +152,7 @@ class VideoController extends Controller
         $rewritten = Cache::remember('terabox_hls_' . $video->id, now()->addMinutes(30), function () use ($video) {
             try {
                 $terabox = app(TeraBoxClient::class);
-                [$playlist] = static::bestHlsPlaylist($terabox, $video);
+                [, $playlist] = static::bestHlsPlaylist($terabox, $video);
             } catch (\Throwable $e) {
                 Log::warning('[TERABOX-HLS] Failed to fetch playlist.', [
                     'video_id' => $video->id,
@@ -221,7 +221,7 @@ class VideoController extends Controller
 
         try {
             $terabox = app(TeraBoxClient::class);
-            [$playlist] = static::bestHlsPlaylist($terabox, $video);
+            [, $playlist] = static::bestHlsPlaylist($terabox, $video);
 
             Cache::put('terabox_hls_' . $video->id, static::rewritePlaylist($video, $playlist), now()->addMinutes(30));
             static::warmFirstSegment($video, $terabox, $playlist);
