@@ -38,24 +38,24 @@
                             <svg class="w-6 h-6 text-primary animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                         </div>
                         <div>
-                            <h2 class="font-bold text-white leading-tight" x-text="'Uploading: ' + fileName"></h2>
-                            <p class="text-xs text-zinc-400">Please keep this window open.</p>
+                            <h2 class="font-bold text-white leading-tight" x-text="syncing ? ('Syncing to Pixeldrain: ' + fileName) : ('Uploading: ' + fileName)"></h2>
+                            <p class="text-xs text-zinc-400" x-text="syncing ? 'Pushing to Pixeldrain cloud. Keep this window open.' : 'Please keep this window open.'"></p>
                         </div>
                     </div>
 
                     <div class="w-full bg-zinc-800 rounded-full h-3 mb-2 overflow-hidden shadow-inner">
-                        <div class="bg-primary h-3 rounded-full transition-all duration-300 relative overflow-hidden" :style="`width: ${progress}%`">
+                        <div class="bg-primary h-3 rounded-full transition-all duration-300 relative overflow-hidden" :style="`width: ${displayProgress}%`">
                             <div class="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"></div>
                         </div>
                     </div>
 
                     <div class="flex justify-between text-xs text-zinc-400 mb-1 font-medium">
-                        <span x-text="progress + '%'"></span>
-                        <span x-text="loadedSize + ' / ' + totalSize"></span>
+                        <span x-text="displayProgress + '%'"></span>
+                        <span x-text="displaySize"></span>
                     </div>
                     <div class="flex justify-between text-xs text-zinc-500">
-                        <span x-text="'Speed: ' + speed"></span>
-                        <span x-text="'ETA: ' + eta"></span>
+                        <span x-text="syncing ? ('Speed: ' + syncSpeed) : ('Speed: ' + speed)"></span>
+                        <span x-text="syncing ? ('ETA: ' + syncEta) : ('ETA: ' + eta)"></span>
                     </div>
                 </div>
             </div>
@@ -111,7 +111,7 @@
                 <!-- done footer -->
                 <div class="mt-3 flex items-center justify-end gap-2">
                     <button @click="window.close()" class="text-[11px] px-3 py-1.5 rounded-lg bg-zinc-800 text-white hover:bg-zinc-700 border border-zinc-700">Close Window</button>
-                    <a x-show="isDone && (phase === 'ready' || phase === 'terabox')" :href="slug ? '{{ url('/video') }}/' + slug : '{{ route('admin.videos.index') }}'" target="_blank" class="text-[11px] px-3 py-1.5 rounded-lg bg-primary text-white font-medium hover:bg-red-600">Open Video</a>
+                    <a x-show="isDone && (phase === 'ready' || phase === 'terabox' || phase === 'pixeldrain')" :href="slug ? '{{ url('/video') }}/' + slug : '{{ route('admin.videos.index') }}'" target="_blank" class="text-[11px] px-3 py-1.5 rounded-lg bg-primary text-white font-medium hover:bg-red-600">Open Video</a>
                 </div>
             </div>
         </template>
@@ -157,6 +157,7 @@
 
     <script>
         const STATUS_URL = '{{ route('upload.status', '__ID__') }}';
+        const PROGRESS_URL = '{{ route('upload.progress', '__TOKEN__') }}';
     </script>
 
     <script src="//unpkg.com/alpinejs" defer></script>
@@ -184,6 +185,18 @@
                 logs: [],
                 copied: false,
                 pollTimer: null,
+
+                // pixeldrain sync state (tracked via cache + token, not video id)
+                uploadToken: '',
+                syncing: false,
+                syncProgress: 0,
+                syncUploaded: 0,
+                syncTotal: 0,
+                syncLastLoaded: 0,
+                syncLastTime: 0,
+                syncSpeed: '--',
+                syncEta: 'calculating...',
+                syncPollTimer: null,
 
                 init() {
                     window.addEventListener('message', (event) => {
@@ -217,6 +230,17 @@
                     return bytesPerSec.toFixed(0) + ' B/s';
                 },
 
+                // Pixeldrain sync bar shows server->Pixeldrain progress once the
+                // browser->server leg is done; otherwise the classic upload bar.
+                get displayProgress() {
+                    return this.syncing ? this.syncProgress : this.progress;
+                },
+
+                get displaySize() {
+                    if (this.syncing) return this.formatSize(this.syncUploaded) + ' / ' + this.formatSize(this.syncTotal);
+                    return this.loadedSize + ' / ' + this.totalSize;
+                },
+
                 phaseLabel() {
                     const map = {
                         uploading: 'Uploading to server',
@@ -224,6 +248,8 @@
                         processing: 'Transcoding to HLS (multi-audio)',
                         'terabox-uploading': 'Syncing to TeraBox',
                         terabox: 'Stored on TeraBox',
+                        'pixeldrain-uploading': 'Syncing to Pixeldrain',
+                        pixeldrain: 'Stored on Pixeldrain',
                         ready: 'Ready — HLS multi-audio',
                         failed: 'Processing failed',
                     };
@@ -231,7 +257,7 @@
                 },
 
                 phaseChipClass() {
-                    if (this.phase === 'ready' || this.phase === 'terabox') return 'bg-green-900/40 text-green-400';
+                    if (this.phase === 'ready' || this.phase === 'terabox' || this.phase === 'pixeldrain') return 'bg-green-900/40 text-green-400';
                     if (this.phase === 'failed') return 'bg-red-900/40 text-red-400';
                     return 'bg-blue-900/40 text-blue-300 animate-pulse';
                 },
@@ -293,14 +319,75 @@
                         });
                 },
 
+                pollPixeldrainSync() {
+                    if (this.syncPollTimer) return;
+
+                    const url = PROGRESS_URL.replace('__TOKEN__', this.uploadToken);
+
+                    const tick = () => {
+                        fetch(url, { headers: { 'Accept': 'application/json' } })
+                            .then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status))
+                            .then(data => {
+                                if (data.active) {
+                                    this.syncing = true;
+                                    this.syncProgress = data.percent || 0;
+                                    this.syncUploaded = data.uploaded || 0;
+                                    this.syncTotal = data.total || 0;
+
+                                    const now = Date.now();
+                                    const timeDiff = (this.syncLastTime ? (now - this.syncLastTime) / 1000 : 0);
+                                    if (timeDiff > 0.5 && this.syncLastLoaded >= 0) {
+                                        const bytesDiff = data.uploaded - this.syncLastLoaded;
+                                        if (bytesDiff > 0 && timeDiff > 0) {
+                                            const currentSpeed = bytesDiff / timeDiff;
+                                            this.syncSpeed = this.formatSpeed(currentSpeed);
+                                            const remaining = data.total - data.uploaded;
+                                            this.syncEta = currentSpeed > 0 ? this.formatETA(remaining / currentSpeed) : 'calculating...';
+                                        }
+                                        this.syncLastLoaded = data.uploaded;
+                                        this.syncLastTime = now;
+                                    }
+
+                                    this.syncPollTimer = setTimeout(tick, 1000);
+                                } else {
+                                    // No active progress entry yet (sync not started)
+                                    // or it was cleared (done). Keep polling either way.
+                                    this.syncPollTimer = setTimeout(tick, 1000);
+                                }
+                            })
+                            .catch(() => {
+                                this.syncPollTimer = setTimeout(tick, 2000);
+                            });
+                    };
+
+                    tick();
+                },
+
+                stopPixeldrainSync() {
+                    if (this.syncPollTimer) {
+                        clearTimeout(this.syncPollTimer);
+                        this.syncPollTimer = null;
+                    }
+                },
+
                 startUpload(action, entries, fileName, storageChoice) {
                     this.status = 'uploading';
                     this.fileName = fileName;
+                    this.syncing = false;
 
                     const formData = new FormData();
                     entries.forEach(entry => {
                         formData.append(entry[0], entry[1]);
                     });
+
+                    // Token lets the popup poll sync progress for a video whose
+                    // id does not exist yet (it is created inside store()).
+                    if (storageChoice === 'pixeldrain') {
+                        const arr = new Uint32Array(2);
+                        (window.crypto || window.msCrypto).getRandomValues(arr);
+                        this.uploadToken = arr[0].toString(36) + arr[1].toString(36) + Date.now().toString(36);
+                        formData.append('upload_token', this.uploadToken);
+                    }
 
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', action, true);
@@ -309,6 +396,8 @@
 
                     this.lastTime = Date.now();
                     this.lastLoaded = 0;
+                    this.syncLastTime = 0;
+                    this.syncLastLoaded = 0;
 
                     xhr.upload.onprogress = (e) => {
                         if (e.lengthComputable) {
@@ -330,10 +419,18 @@
                                 this.lastLoaded = e.loaded;
                                 this.lastTime = now;
                             }
+
+                            // Browser->server leg done; store() is now pushing to
+                            // Pixeldrain. Switch the bar to the sync progress.
+                            if (storageChoice === 'pixeldrain' && e.loaded >= e.total) {
+                                this.pollPixeldrainSync();
+                            }
                         }
                     };
 
                     xhr.onload = () => {
+                        this.stopPixeldrainSync();
+
                         if (xhr.status >= 200 && xhr.status < 300) {
                             let data = {};
                             try {
@@ -355,7 +452,9 @@
                                 this.status = 'success';
                                 this.successMessage = storageChoice === 'terabox'
                                     ? 'Upload to server complete. TeraBox sync has been queued.'
-                                    : 'Video uploaded successfully to local storage.';
+                                    : storageChoice === 'pixeldrain'
+                                        ? 'Video uploaded successfully to Pixeldrain.'
+                                        : 'Video uploaded successfully to local storage.';
 
                                 setTimeout(() => {
                                     window.close();
@@ -368,6 +467,7 @@
                     };
 
                     xhr.onerror = () => {
+                        this.stopPixeldrainSync();
                         this.status = 'error';
                         this.errorMessage = 'A network error occurred during upload.';
                     };

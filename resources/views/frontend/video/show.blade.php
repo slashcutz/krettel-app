@@ -49,6 +49,21 @@
         </script>
 
         <script>
+            @php
+                // Precompute so the JS below can use plain @json($var) calls
+                // (Blade's @json directive breaks on commas inside the expression).
+                $pixeldrainAudioTrackData = $pixeldrainAudioTracks->map(fn ($t) => [
+                    'id' => $t->file_path,
+                    'label' => $t->label ?: 'Audio',
+                    'isDefault' => (bool) $t->is_default,
+                ])->values();
+
+                $pixeldrainQualityVariantData = $pixeldrainQualityVariants->map(fn ($v) => [
+                    'id' => $v->file_path,
+                    'label' => $v->label ?: ($v->height ? $v->height . 'p' : 'Quality'),
+                    'height' => $v->height,
+                ])->values();
+            @endphp
             document.addEventListener('alpine:init', () => {
                 Alpine.data('videoPlayer', (id = null) => ({
                     isPlaying: false,
@@ -75,12 +90,20 @@
                     levels: [],
                     audioTracks: [],
                     audioTrack: -1,
+                    isPixeldrain: {{ $video->storage_provider === 'pixeldrain' ? 'true' : 'false' }},
+                    pixeldrainAudioTracks: @json($pixeldrainAudioTrackData),
+                    pixeldrainQuality: 'original',
+                    pixeldrainStreamUrl: null,
+                    pixeldrainQualityVariants: @json($pixeldrainQualityVariantData),
                     isDirectStream: false,
                     streamQuality: '480',
                     downloadMode: null,
 
                     initPlayer() {
                         this.volume = this.$refs.video.volume;
+                        // Pixeldrain: audio tracks are known from the server, so
+                        // build the switcher right away (don't wait for metadata).
+                        if (this.isPixeldrain) this.buildAudioMenu();
                         // Attach HLS (m3u8) source via hls.js when the source is HLS.
                         this.attachHls();
                         // Start Heartbeat sync for analytics
@@ -92,6 +115,9 @@
                         this.$refs.video.addEventListener('loadedmetadata', () => {
                             this.duration = this.$refs.video.duration;
                             this.syncContinueWatching();
+                            // Native MP4 (Pixeldrain): no hls.js audioTracks, so
+                            // build the switcher from the split-track metadata.
+                            if (this.isPixeldrain) this.buildAudioMenu();
                         });
 
                         // Track buffer state
@@ -246,6 +272,22 @@
                     },
 
                     buildAudioMenu() {
+                        // Pixeldrain videos have their audio tracks split into
+                        // separate Pixeldrain files; switching re-muxes on demand.
+                        if (this.isPixeldrain) {
+                            this.audioTracks = (this.pixeldrainAudioTracks || []).map((t, i) => ({
+                                index: i,
+                                id: t.id,
+                                label: t.label,
+                                isDefault: !!t.isDefault
+                            }));
+                            // Keep a user-selected track; only pick the default on first load.
+                            if (this.audioTrack < 0) {
+                                const def = this.audioTracks.findIndex(t => t.isDefault);
+                                this.audioTrack = def >= 0 ? def : (this.audioTracks.length ? 0 : -1);
+                            }
+                            return;
+                        }
                         const hls = this.hls;
                         if (hls && hls.audioTracks && hls.audioTracks.length) {
                             this.audioTracks = hls.audioTracks.map((t, i) => ({
@@ -280,11 +322,67 @@
                     setAudioTrack(index) {
                         this.showSettings = false;
                         this.audioTrack = index;
+                        if (this.isPixeldrain) {
+                            this.switchPixeldrainAudio(index);
+                            return;
+                        }
                         if (this.hls && this.hls.audioTracks && this.hls.audioTracks.length) {
                             this.hls.audioTrack = index;
                         } else if (this.$refs.video.audioTracks) {
                             Array.from(this.$refs.video.audioTracks).forEach((t, i) => { t.enabled = (i === index); });
                         }
+                    },
+
+                    switchPixeldrainAudio(index) {
+                        const track = this.audioTracks[index];
+                        if (!track) return;
+                        this.audioTrack = index;
+                        this.loadPixeldrainStream();
+                    },
+
+                    setPixeldrainQuality(id) {
+                        this.showSettings = false;
+                        if (this.pixeldrainQuality === id) return;
+                        this.pixeldrainQuality = id;
+                        this.loadPixeldrainStream();
+                    },
+
+                    loadPixeldrainStream() {
+                        const baseUrl = "{{ route('video.stream.pixeldrain', $video->id) }}";
+                        const currentAudio = this.audioTracks.find(t => t.index === this.audioTrack);
+                        const isDefaultAudio = !currentAudio || currentAudio.isDefault;
+
+                        let url;
+                        if (this.pixeldrainQuality === 'original') {
+                            url = isDefaultAudio
+                                ? baseUrl
+                                : baseUrl + '/audio/' + encodeURIComponent(currentAudio.id);
+                        } else {
+                            const variant = (this.pixeldrainQualityVariants || []).find(v => v.id === this.pixeldrainQuality);
+                            if (!variant) return;
+                            url = isDefaultAudio
+                                ? baseUrl + '/quality/' + encodeURIComponent(variant.id)
+                                : baseUrl + '/quality/' + encodeURIComponent(variant.id) + '/audio/' + encodeURIComponent(currentAudio.id);
+                        }
+
+                        if (this.pixeldrainStreamUrl === url) return;
+                        this.pixeldrainStreamUrl = url;
+
+                        const video = this.$refs.video;
+                        const currentTime = video.currentTime;
+                        const wasPlaying = !video.paused;
+
+                        if (this.hls) {
+                            this.hls.destroy();
+                            this.hls = null;
+                        }
+
+                        video.src = url;
+                        video.load();
+                        video.addEventListener('loadedmetadata', () => {
+                            video.currentTime = currentTime;
+                            if (wasPlaying) video.play();
+                        }, { once: true });
                     },
 
                     activeAudioLabel() {
@@ -819,7 +917,7 @@
                     <!-- Processing Overlay -->
                     <div class="w-full h-full flex flex-col items-center justify-center gap-4">
                         <svg class="w-16 h-16 text-primary animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                        <p class="text-white font-medium">Uploading to TeraBox...</p>
+                        <p class="text-white font-medium">{{ $video->storage_provider === 'pixeldrain' ? 'Uploading to Pixeldrain...' : ($video->storage_provider === 'terabox' ? 'Uploading to TeraBox...' : 'Uploading...') }}</p>
                         <p class="text-gray-400 text-sm">Your video will appear here once processing is complete.</p>
                     </div>
                 @else
@@ -928,7 +1026,19 @@
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                                     Quality
                                 </div>
-                                 @if($video->video_url === 'terabox-remote')
+                                 @if($video->storage_provider === 'pixeldrain')
+                                     <!-- Pixeldrain: original file + pre-transcoded H.264 variants -->
+                                     <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="setPixeldrainQuality('original')">
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': pixeldrainQuality === 'original', 'text-gray-300': pixeldrainQuality !== 'original' }">Original{{ $video->resolution ? ' (' . $video->resolution . ')' : '' }}</span>
+                                         <svg x-show="pixeldrainQuality === 'original'" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                     </div>
+                                     <template x-for="v in pixeldrainQualityVariants" :key="v.id">
+                                         <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="setPixeldrainQuality(v.id)">
+                                             <span class="text-sm" :class="{ 'text-primary font-bold': pixeldrainQuality === v.id, 'text-gray-300': pixeldrainQuality !== v.id }" x-text="v.label"></span>
+                                             <svg x-show="pixeldrainQuality === v.id" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                         </div>
+                                     </template>
+                                 @elseif($video->video_url === 'terabox-remote')
                                      <!-- Quality Modes for TeraBox Remote -->
                                      <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('480')">
                                          <span class="text-sm" :class="{ 'text-primary font-bold': !isDirectStream && streamQuality === '480', 'text-gray-300': isDirectStream || streamQuality !== '480' }">480p (Fast)</span>

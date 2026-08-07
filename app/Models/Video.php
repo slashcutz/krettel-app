@@ -18,15 +18,7 @@ class Video extends Model
             return null;
         }
 
-        if (str_starts_with($value, 'terabox://')) {
-            return route('terabox.image', ['model' => 'video', 'id' => $this->id]);
-        }
-
-        if (str_starts_with($value, 'http')) {
-            return $value;
-        }
-
-        return asset('storage/' . $value);
+        return \App\Support\TeraBoxImage::url($value, 'video', $this->id);
     }
 
     public function category()

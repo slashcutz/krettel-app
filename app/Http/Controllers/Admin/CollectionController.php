@@ -9,7 +9,7 @@ use App\Models\Collection;
 use App\Models\CollectionItem;
 use App\Models\User;
 use App\Models\Video;
-use App\Support\TeraBoxImageStore;
+use App\Support\PixeldrainImageStore;
 
 class CollectionController extends Controller
 {
@@ -77,9 +77,8 @@ class CollectionController extends Controller
         $file = $request->file('image');
         $local = $file->store('collections', 'public');
 
-        $ref = TeraBoxImageStore::upload(
+        $ref = PixeldrainImageStore::upload(
             $file,
-            TeraBoxImageStore::remoteDir('Collections'),
             'collection-' . Str::slug($request->input('name', 'image')) . '-' . uniqid() . '.' . $file->getClientOriginalExtension()
         );
 

@@ -78,7 +78,7 @@
                                 <input type="checkbox" name="video_ids[]" value="{{ $video->id }}" id="video_{{ $video->id }}" class="rounded border-border text-primary focus:ring-primary bg-secondary mr-4" :checked="selected.has('{{ $video->id }}')" @change="selected.has('{{ $video->id }}') ? selected.delete('{{ $video->id }}') : selected.add('{{ $video->id }}')">
                                 <label for="video_{{ $video->id }}" class="flex items-center flex-1 min-w-0 cursor-pointer">
                                     <div class="w-20 h-12 bg-secondary border border-border rounded overflow-hidden flex-shrink-0 mr-4">
-                                        <img src="{{ $video->thumbnail ? asset('storage/' . $video->thumbnail) : 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover" alt="">
+                                        <img src="{{ $video->thumbnail ? \App\Support\TeraBoxImage::url($video->thumbnail ?: $video->poster ?: $video->terabox_image, 'video', $video->id) : 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover" alt="">
                                     </div>
                                     <div class="min-w-0">
                                         <p class="text-sm font-medium text-white truncate">{{ $video->title }}</p>

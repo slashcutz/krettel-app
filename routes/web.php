@@ -13,6 +13,11 @@ Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/watch/{slug}', [VideoController::class, 'show'])->name('video.show');
 Route::get('/stream/{video}', [VideoController::class, 'stream'])->name('video.stream');
 Route::get('/stream/direct/{video}', [VideoController::class, 'streamDirect'])->name('video.stream.direct');
+
+Route::get('/stream/pixeldrain/{video}', [VideoController::class, 'streamPixeldrain'])->name('video.stream.pixeldrain');
+Route::get('/stream/pixeldrain/{video}/audio/{audioId}', [VideoController::class, 'streamPixeldrainAudio'])->name('video.stream.pixeldrain.audio');
+Route::get('/stream/pixeldrain/{video}/quality/{variant}', [VideoController::class, 'streamPixeldrainVariant'])->name('video.stream.pixeldrain.quality');
+Route::get('/stream/pixeldrain/{video}/quality/{variant}/audio/{audioId}', [VideoController::class, 'streamPixeldrainVariantAudio'])->name('video.stream.pixeldrain.quality.audio');
 Route::get('/stream/720/{video}', [VideoController::class, 'stream720'])->name('video.stream.transcode');
 Route::get('/terabox-test', [VideoController::class, 'teraboxTest']);
 Route::get('/stream/segment/{video}/{u}', [VideoController::class, 'segment'])->name('video.segment');
@@ -40,6 +45,15 @@ Route::middleware(['auth', 'role:Super Admin|Admin'])->group(function () {
     Route::post('/upload', [VideoUploadController::class, 'store'])->name('upload.store');
     Route::get('/upload/status/{video}', [VideoUploadController::class, 'status'])->name('upload.status');
 });
+
+// Polled by the upload popup WHILE store() is still running the sync Pixeldrain
+// upload. Deliberately session-less (no auth) — store() holds the session lock
+// for the whole request, so a session-based poll would just block until the
+// upload finishes. The token itself is the capability: it is a random value
+// generated in the popup and is meaningless to anyone else.
+Route::get('/upload/progress/{token}', [VideoUploadController::class, 'progress'])
+    ->name('upload.progress')
+    ->withoutMiddleware('web');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile/setup', [ProfileSetupController::class, 'create'])->name('profile.setup');

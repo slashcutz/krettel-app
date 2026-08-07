@@ -117,6 +117,37 @@
                     </div>
                 </div>
 
+                <!-- Pixeldrain Integration -->
+                <div class="lg:col-span-3 bg-card border border-border rounded-xl overflow-hidden">
+                    <div class="px-5 md:px-6 py-3.5 md:py-4 border-b border-border flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <h2 class="text-base md:text-lg font-bold text-white">Pixeldrain Integration</h2>
+                            <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-success/10 text-success">Cloud Storage</span>
+                        </div>
+                    </div>
+
+                    <div class="p-5 md:p-6">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div class="sm:col-span-2">
+                                <label for="pixeldrain_api_key" class="block text-sm font-medium text-muted mb-1.5">API Key</label>
+                                <input type="text" id="pixeldrain_api_key" name="pixeldrain_api_key" value="{{ old('pixeldrain_api_key', $settings['pixeldrain_api_key'] ?? config('pixeldrain.api_key')) }}" placeholder="Paste Pixeldrain API key" class="w-full bg-secondary border border-border text-white rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary font-mono text-sm">
+                                <p class="text-xs text-muted mt-1.5">Get it from <a class="text-primary underline" href="https://pixeldrain.net/user/settings" target="_blank">pixeldrain.net/user/settings</a>. Required for streaming + keep-alive.</p>
+                            </div>
+                            <div>
+                                <label for="pixeldrain_base_url" class="block text-sm font-medium text-muted mb-1.5">Base URL</label>
+                                <input type="url" id="pixeldrain_base_url" name="pixeldrain_base_url" value="{{ old('pixeldrain_base_url', $settings['pixeldrain_base_url'] ?? config('pixeldrain.base_url')) }}" class="w-full bg-secondary border border-border text-white rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary font-mono text-sm">
+                                <p class="text-xs text-muted mt-1.5">Use <code class="text-white">pixeldrain.net</code> if your ISP blocks the main domain.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="px-5 md:px-6 py-4 border-t border-border bg-secondary/20 flex flex-col md:flex-row items-center justify-between gap-3">
+                        <p class="text-xs text-muted text-center md:text-left">Values in the database override <code class="text-white">PIXELDRAIN_*</code> in <code class="text-white">.env</code>.</p>
+                        <button type="submit" class="w-full md:w-auto md:min-w-[200px] bg-primary hover:bg-red-600 text-white px-8 py-2.5 rounded-lg transition-colors font-bold shadow-[0_0_15px_rgba(239,68,68,0.3)]">Save Settings</button>
+                    </div>
+                </div>
+
             </div>
         </form>
     </div>

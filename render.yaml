@@ -11,7 +11,10 @@
 #      env vars are needed.
 #   3. Set APP_URL to your app's *.onrender.com (or custom domain) URL.
 #   4. Set the TERABOX_* credentials (same as your local .env).
-#   5. Recommend the `standard` plan (or higher) when you need in-container
+#   5. Set PIXELDRAIN_API_KEY — required for Pixeldrain uploads/streaming AND
+#      for the Pixeldrain image store (thumbnails/posters/banners/logos).
+#      PIXELDRAIN_BASE_URL defaults to https://pixeldrain.net.
+#   6. Recommend the `standard` plan (or higher) when you need in-container
 #      HLS transcoding — the `starter`/`free` plans (512MB) can OOM while
 #      ffmpeg muxes/encodes large files.
 #
@@ -64,5 +67,11 @@ services:
         value: /Apps/Krettel
       - key: TERABOX_WEB_HOST
         value: https://www.1024terabox.com
+      # Pixeldrain (keep in sync with your local .env) — needed for uploads,
+      # streaming, quality variants and the Pixeldrain image store.
+      - key: PIXELDRAIN_API_KEY
+        sync: false
+      - key: PIXELDRAIN_BASE_URL
+        value: https://pixeldrain.net
       # FFMPEG_BINARY / FFPROBE_BINARY: intentionally unset — the image ships
       # ffmpeg/ffprobe on PATH, matching the config defaults.

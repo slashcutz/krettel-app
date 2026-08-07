@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Banner;
+use App\Support\PixeldrainImageStore;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class BannerController extends Controller
 {
@@ -47,7 +49,15 @@ class BannerController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $data['image_url'] = $request->file('image')->store('banners', 'public');
+            $file = $request->file('image');
+            $local = $file->store('banners', 'public');
+
+            $ref = PixeldrainImageStore::upload(
+                $file,
+                'banner-' . Str::slug($request->input('title', 'banner')) . '-' . uniqid() . '.' . $file->getClientOriginalExtension()
+            );
+
+            $data['image_url'] = $ref ?: $local;
         }
 
         Banner::create($data);
@@ -97,7 +107,15 @@ class BannerController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $data['image_url'] = $request->file('image')->store('banners', 'public');
+            $file = $request->file('image');
+            $local = $file->store('banners', 'public');
+
+            $ref = PixeldrainImageStore::upload(
+                $file,
+                'banner-' . Str::slug($request->input('title', 'banner')) . '-' . uniqid() . '.' . $file->getClientOriginalExtension()
+            );
+
+            $data['image_url'] = $ref ?: $local;
         }
 
         $banner->update($data);

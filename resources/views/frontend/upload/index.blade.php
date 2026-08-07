@@ -97,8 +97,8 @@
                                 <div class="space-y-4">
                                     <div class="grid grid-cols-1 gap-4">
                                         <div>
-                                            <x-input-label for="terabox_image" value="TeraBox Image URL (optional)" />
-                                            <x-text-input id="terabox_image" class="block mt-1 w-full" type="text" name="terabox_image" placeholder="https://... or terabox://remote/path" />
+                                            <x-input-label for="terabox_image" value="Image URL (optional)" />
+                                            <x-text-input id="terabox_image" class="block mt-1 w-full" type="text" name="terabox_image" placeholder="https://... or pixeldrain://file-id" />
                                         </div>
                                         <div>
                                             <x-input-label for="previews" value="Preview Images (optional, shown randomly on cards)" />
@@ -163,8 +163,9 @@
                                     <div>
                                         <x-input-label for="storage" value="Storage Provider" />
                                         <select name="storage_provider" class="mt-1 block w-full rounded-md border-border bg-secondary text-white focus:border-primary">
+                                            <option value="pixeldrain" selected>Pixeldrain (Cloud)</option>
+                                            <option value="terabox">TeraBox (Cloud)</option>
                                             <option value="local">Local Storage</option>
-                                            <option value="terabox" selected>TeraBox (Cloud)</option>
                                         </select>
                                     </div>
                                 </div>
@@ -367,8 +368,7 @@
                 submitForm() {
                     const form = document.getElementById('uploadForm');
                     const formData = new FormData(form);
-                    const storageChoice = (document.querySelector('[name="storage_provider"]')?.value === 'terabox')
-                        ? 'terabox' : 'local';
+                    const storageChoice = document.querySelector('[name="storage_provider"]')?.value || 'local';
                     const videoFileName = this.videoFile ? this.videoFile.name : 'Video';
                     
                     // Convert FormData to an array of entries so it can be cloned via postMessage

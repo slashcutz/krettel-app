@@ -23,7 +23,7 @@
                         <tr class="border-b border-border hover:bg-secondary/30 transition-colors">
                             <td class="px-6 py-4">
                                 <div class="w-32 h-16 bg-secondary rounded overflow-hidden">
-                                    <img src="{{ Str::startsWith($banner->image_url, ['http://', 'https://']) ? $banner->image_url : asset('storage/' . $banner->image_url) }}" class="w-full h-full object-cover">
+                                    <img src="{{ \App\Support\TeraBoxImage::url($banner->image_url, 'banner', $banner->id) }}" class="w-full h-full object-cover">
                                 </div>
                             </td>
                             <td class="px-6 py-4 font-medium text-white">{{ $banner->title }}</td>
@@ -59,7 +59,7 @@
             <div class="p-4">
                 <div class="flex items-start gap-3">
                     <div class="w-24 h-14 bg-secondary rounded overflow-hidden flex-shrink-0">
-                                    <img src="{{ Str::startsWith($banner->image_url, ['http://', 'https://']) ? $banner->image_url : asset('storage/' . $banner->image_url) }}" class="w-full h-full object-cover">
+                                    <img src="{{ \App\Support\TeraBoxImage::url($banner->image_url, 'banner', $banner->id) }}" class="w-full h-full object-cover">
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white line-clamp-2">{{ $banner->title }}</p>

@@ -23,10 +23,7 @@
                 </div>
 
                 @php
-                    $existingImage = $banner->image_url ? asset('storage/' . $banner->image_url) : '';
-                    if (filter_var($banner->image_url, FILTER_VALIDATE_URL)) {
-                        $existingImage = $banner->image_url;
-                    }
+                    $existingImage = $banner->image_url ? \App\Support\TeraBoxImage::url($banner->image_url, 'banner', $banner->id) : '';
                 @endphp
                 <div x-data="{ logoPreview: '{{ $existingImage }}' }">
                     <label for="image" class="block text-sm font-medium text-white mb-2">Banner Image</label>

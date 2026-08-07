@@ -21,7 +21,7 @@
 
         @if($collection->image)
             <div class="px-4 sm:px-6 py-4 border-b border-border">
-                <img src="{{ asset('storage/' . $collection->image) }}" class="h-40 w-full sm:w-64 object-cover rounded-lg border border-border" alt="{{ $collection->name }} cover">
+                <img src="{{ \App\Support\TeraBoxImage::url($collection->terabox_image ?: $collection->image, 'collection', $collection->id) }}" class="h-40 w-full sm:w-64 object-cover rounded-lg border border-border" alt="{{ $collection->name }} cover">
             </div>
         @endif
 
@@ -38,7 +38,7 @@
                         <tr class="border-b border-border hover:bg-secondary/30 transition-colors">
                             <td class="px-6 py-4 flex items-center space-x-3">
                                 <div class="w-16 h-10 bg-secondary rounded overflow-hidden flex-shrink-0">
-                                    <img src="{{ $item->video->thumbnail ? asset('storage/' . $item->video->thumbnail) : 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover">
+                                    <img src="{{ $item->video->thumbnail ? \App\Support\TeraBoxImage::url($item->video->thumbnail ?: $item->video->poster ?: $item->video->terabox_image, 'video', $item->video->id) : 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover">
                                 </div>
                                 <span class="font-medium text-white">{{ $item->video->title ?? 'Unknown Video' }}</span>
                             </td>
@@ -63,7 +63,7 @@
             <div class="p-4">
                 <div class="flex items-center gap-3">
                     <div class="w-20 h-12 bg-secondary rounded overflow-hidden flex-shrink-0">
-                        <img src="{{ $item->video->thumbnail ? asset('storage/' . $item->video->thumbnail) : 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover">
+                        <img src="{{ $item->video->thumbnail ? \App\Support\TeraBoxImage::url($item->video->thumbnail ?: $item->video->poster ?: $item->video->terabox_image, 'video', $item->video->id) : 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover">
                     </div>
                     <p class="text-sm font-medium text-white flex-1 min-w-0 line-clamp-2">{{ $item->video->title ?? 'Unknown Video' }}</p>
                 </div>

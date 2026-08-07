@@ -9,8 +9,9 @@ class TeraBoxImage
     /**
      * Resolve a stored image value to the fastest possible URL.
      *
-     * - terabox:// refs: serve the static /storage copy when warmed, otherwise
-     *   fall back to the proxy route (which warms the static copy on first hit).
+     * - terabox:// / pixeldrain:// refs: serve the static /storage copy when
+     *   warmed, otherwise fall back to the proxy route (which warms the static
+     *   copy on first hit).
      * - http(s) URLs: used as-is.
      * - plain local paths: /storage/…
      */
@@ -20,7 +21,7 @@ class TeraBoxImage
             return null;
         }
 
-        if (str_starts_with($value, 'terabox://')) {
+        if (str_starts_with($value, 'terabox://') || str_starts_with($value, 'pixeldrain://')) {
             $local = TeraBoxImageController::localUrl($model, $id, $value);
 
             return $local ?: route('terabox.image', ['model' => $model, 'id' => $id]);

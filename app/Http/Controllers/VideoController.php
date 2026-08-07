@@ -74,7 +74,21 @@ class VideoController extends Controller
 
         $streamUrl = static::resolveStreamUrl($video);
 
-        return view('frontend.video.show', compact('video', 'relatedVideos', 'recentlyWatched', 'streamUrl', 'inMyList'));
+        $pixeldrainAudioTracks = collect();
+        $pixeldrainQualityVariants = collect();
+        if ($video->storage_provider === 'pixeldrain') {
+            $pixeldrainAudioTracks = \App\Models\VideoAudioTrack::where('video_id', $video->id)
+                ->where('storage', 'pixeldrain')
+                ->orderByDesc('is_default')
+                ->orderBy('id')
+                ->get();
+            $pixeldrainQualityVariants = \App\Models\VideoQualityVariant::where('video_id', $video->id)
+                ->where('storage', 'pixeldrain')
+                ->orderByDesc('height')
+                ->get();
+        }
+
+        return view('frontend.video.show', compact('video', 'relatedVideos', 'recentlyWatched', 'streamUrl', 'inMyList', 'pixeldrainAudioTracks', 'pixeldrainQualityVariants'));
     }
 
     /**
@@ -92,6 +106,14 @@ class VideoController extends Controller
         // the configured APP_URL (dev server port differs from APP_URL).
         if ($video->hls_status === 'ready' && $video->hls_folder) {
             return '/stream/hls/' . $video->id . '/index.m3u8';
+        }
+
+        // Pixeldrain videos are proxied through our server (no transcode —
+        // original resolution plays as-is).
+        if ($video->storage_provider === 'pixeldrain' && $video->storage_folder) {
+            return Route::has('video.stream.pixeldrain')
+                ? route('video.stream.pixeldrain', ['video' => $video->id])
+                : null;
         }
 
         if ($video->video_url !== 'terabox-remote' || ! $video->storage_folder) {
@@ -302,6 +324,246 @@ class VideoController extends Controller
         $decoded = base64_decode(strtr($token, '-_', '+/'), true);
 
         return $decoded === false ? null : $decoded;
+    }
+
+    /**
+     * Stream a Pixeldrain-hosted video through our server.
+     *
+     * Pixeldrain has no transcode tier — the uploaded file is served at its
+     * original resolution, so upload 720p/1080p MP4 and the player gets real
+     * 720p+. Requests are proxied (the browser never talks to pixeldrain
+     * directly, which sidesteps free-tier hotlink protection and ISP blocks)
+     * and upstream Range requests are forwarded so seeking works.
+     */
+    public function streamPixeldrain(Video $video)
+    {
+        if ($video->storage_provider !== 'pixeldrain' || ! $video->storage_folder) {
+            abort(404);
+        }
+
+        return $this->proxyPixeldrainFile(
+            $video->storage_folder,
+            static::mimeForPath($video->storage_folder)
+        );
+    }
+
+    /**
+     * Proxy a file stored on Pixeldrain through our server.
+     *
+     * Requests are proxied (the browser never talks to pixeldrain directly,
+     * which sidesteps free-tier hotlink protection and ISP blocks) and upstream
+     * Range requests are forwarded so seeking works.
+     */
+    protected function proxyPixeldrainFile(string $fileId, string $contentType): StreamedResponse
+    {
+        $client = app(\App\Services\PixeldrainClient::class);
+        $url = $client->fileUrl($fileId);
+
+        $headers = "User-Agent: " . config('terabox.user_agent') . "\r\n" .
+                   "Accept: */*\r\n";
+
+        $authHeader = $client->authHeader();
+        if ($authHeader) {
+            $headers .= $authHeader . "\r\n";
+        }
+
+        $opts = ['http' => ['method' => 'GET', 'header' => $headers]];
+
+        $clientRange = request()->header('Range');
+        if ($clientRange) {
+            $opts['http']['header'] .= "Range: " . $clientRange . "\r\n";
+        }
+
+        $stream = @fopen($url, 'rb', false, stream_context_create($opts));
+
+        if (! $stream) {
+            Log::warning('[PIXELDRAIN-STREAM] Failed to open upstream stream for file ' . $fileId);
+            abort(502, 'Stream unavailable. Please try again later.');
+        }
+
+        $meta = static::parseStreamMeta($stream, $contentType);
+
+        return response()->stream(function () use ($stream) {
+            if (function_exists('apache_setenv')) {
+                @apache_setenv('no-gzip', 1);
+            }
+            @ini_set('zlib.output_compression', 'Off');
+            @ob_implicit_flush(true);
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            fpassthru($stream);
+            fclose($stream);
+        }, $meta['status'], $meta['headers']);
+    }
+
+    /**
+     * Stream a pre-transcoded quality variant (720p/480p H.264) of a
+     * Pixeldrain-hosted video. The variant already carries the default audio
+     * track, so this plays the selected quality with the default language.
+     */
+    public function streamPixeldrainVariant(Video $video, \App\Models\VideoQualityVariant $variant)
+    {
+        if ($video->storage_provider !== 'pixeldrain' || $variant->video_id !== $video->id || ! $variant->file_path) {
+            abort(404);
+        }
+
+        return $this->proxyPixeldrainFile($variant->file_path, 'video/mp4');
+    }
+
+    /**
+     * Re-mux the Pixeldrain-hosted video with a chosen split audio track and
+     * stream the result as fragmented MP4.
+     *
+     * The video is fetched from Pixeldrain, the selected audio track from
+     * Pixeldrain, and ffmpeg muxes them together (video + audio stream are
+     * both copied — no re-encode, so it is fast). Used by the audio switcher
+     * for multi-audio Pixeldrain videos; the default track plays directly via
+     * streamPixeldrain() without a re-mux.
+     */
+    public function streamPixeldrainAudio(Video $video, string $audioId)
+    {
+        if ($video->storage_provider !== 'pixeldrain' || ! $video->storage_folder) {
+            abort(404);
+        }
+
+        $track = \App\Models\VideoAudioTrack::where('video_id', $video->id)
+            ->where('storage', 'pixeldrain')
+            ->where('file_path', $audioId)
+            ->first();
+
+        if (! $track) {
+            abort(404);
+        }
+
+        return $this->streamPixeldrainRemux($video, $video->storage_folder, $audioId);
+    }
+
+    /**
+     * Re-mux a pre-transcoded quality variant with a chosen split audio track.
+     * Used when the user picks a non-default language while a 720p/480p variant
+     * is active (the variant itself only carries the default audio).
+     */
+    public function streamPixeldrainVariantAudio(Video $video, string $variantId, string $audioId)
+    {
+        if ($video->storage_provider !== 'pixeldrain' || ! $video->storage_folder) {
+            abort(404);
+        }
+
+        $variant = \App\Models\VideoQualityVariant::where('video_id', $video->id)
+            ->where('storage', 'pixeldrain')
+            ->where('file_path', $variantId)
+            ->first();
+
+        $track = \App\Models\VideoAudioTrack::where('video_id', $video->id)
+            ->where('storage', 'pixeldrain')
+            ->where('file_path', $audioId)
+            ->first();
+
+        if (! $variant || ! $track) {
+            abort(404);
+        }
+
+        return $this->streamPixeldrainRemux($video, $variant->file_path, $audioId);
+    }
+
+    /**
+     * Re-mux a video file (original or variant) stored on Pixeldrain with a
+     * chosen split audio track and stream the result as fragmented MP4.
+     *
+     * Both inputs are fetched from Pixeldrain and both streams are copied (no
+     * re-encode, so it is fast). Used by the audio/quality switcher for
+     * multi-audio Pixeldrain videos; default audio plays directly via
+     * streamPixeldrain()/streamPixeldrainVariant() without a re-mux.
+     */
+    protected function streamPixeldrainRemux(Video $video, string $videoFileId, string $audioId): StreamedResponse
+    {
+        $ffmpeg = config('ffmpeg.ffmpeg');
+        if (! $ffmpeg) {
+            Log::error('[PIXELDRAIN-AUDIO] FFmpeg not available for video ' . $video->id);
+            abort(502, 'Transcoder unavailable.');
+        }
+
+        $client = app(\App\Services\PixeldrainClient::class);
+        $videoUrl = $client->fileUrl($videoFileId);
+        $audioUrl = $client->fileUrl($audioId);
+
+        $authHeaders = '';
+        if ($auth = $client->authHeader()) {
+            $authHeaders = $auth . "\r\n";
+        }
+
+        return response()->stream(function () use ($video, $ffmpeg, $videoUrl, $audioUrl, $authHeaders) {
+            @ini_set('zlib.output_compression', 'Off');
+            @ini_set('max_execution_time', '0');
+            if (function_exists('apache_setenv')) {
+                @apache_setenv('no-gzip', 1);
+            }
+            @ob_implicit_flush(true);
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            $args = [
+                $ffmpeg,
+                '-y', '-nostdin', '-loglevel', 'error',
+                '-headers', $authHeaders,
+                '-i', $videoUrl,
+                '-headers', $authHeaders,
+                '-i', $audioUrl,
+                '-map', '0:v:0',
+                '-map', '1:a:0',
+                '-c:v', 'copy',
+                '-c:a', 'copy',
+                '-avoid_negative_ts', 'make_zero',
+                '-max_muxing_queue_size', '1024',
+                '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+                '-f', 'mp4',
+                'pipe:1',
+            ];
+
+            $process = proc_open($args, [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ], $pipes);
+
+            if (! is_resource($process)) {
+                echo 'Stream unavailable.';
+                return;
+            }
+
+            fclose($pipes[0]);
+
+            while (! feof($pipes[1])) {
+                $chunk = fread($pipes[1], 65536);
+                if ($chunk !== false && $chunk !== '') {
+                    echo $chunk;
+                    flush();
+                }
+            }
+            fclose($pipes[1]);
+
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+            $exitCode = proc_close($process);
+
+            if ($exitCode !== 0) {
+                Log::error('[PIXELDRAIN-AUDIO] ffmpeg exited with code ' . $exitCode . ' for video ' . $video->id, [
+                    'video_file' => $videoFileId,
+                    'audio_id' => $audioId,
+                    'stderr' => trim((string) $stderr),
+                ]);
+            }
+        }, 200, [
+            'Content-Type' => 'video/mp4',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+            'Accept-Ranges' => 'none',
+        ]);
     }
 
     /**

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Setting;
-use App\Support\TeraBoxImageStore;
+use App\Support\PixeldrainImageStore;
 use Illuminate\Support\Str;
 
 class SettingController extends Controller
@@ -44,6 +44,8 @@ class SettingController extends Controller
             'terabox_ndus' => 'nullable|string|max:500',
             'terabox_remote_dir' => 'nullable|string|max:255',
             'terabox_web_host' => 'nullable|url|max:255',
+            'pixeldrain_api_key' => 'nullable|string|max:500',
+            'pixeldrain_base_url' => 'nullable|url|max:255',
         ]);
 
         foreach (['platform_name', 'support_email', 'seo_description', 'primary_color'] as $key) {
@@ -58,13 +60,19 @@ class SettingController extends Controller
             $logo->storeAs('settings', $filename, 'public');
             Setting::set('navbar_logo', '/storage/settings/' . $filename);
 
-            $ref = TeraBoxImageStore::upload($logo, TeraBoxImageStore::remoteDir('Settings'), $filename);
+            $ref = PixeldrainImageStore::upload($logo, $filename);
             if ($ref) {
                 Setting::set('navbar_logo', $ref);
             }
         }
 
         foreach (['terabox_email', 'terabox_password', 'terabox_ndus', 'terabox_remote_dir', 'terabox_web_host'] as $key) {
+            if ($request->has($key)) {
+                Setting::set($key, $request->input($key));
+            }
+        }
+
+        foreach (['pixeldrain_api_key', 'pixeldrain_base_url'] as $key) {
             if ($request->has($key)) {
                 Setting::set($key, $request->input($key));
             }

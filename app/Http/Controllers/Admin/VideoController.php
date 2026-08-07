@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Video;
+use App\Support\PixeldrainImageStore;
+use Illuminate\Http\Request;
 
 class VideoController extends Controller
 {
@@ -78,6 +79,8 @@ class VideoController extends Controller
             'trailer_url' => 'nullable|url|max:500',
             'terabox_image' => 'nullable|string|max:500',
             'storage_folder' => 'nullable|string|max:500',
+            'storage_provider' => 'nullable|string|in:local,terabox,pixeldrain',
+            'pixeldrain_file_id' => 'nullable|string|max:500',
             'video_file' => 'nullable|file|mimes:mp4,mkv,webm|max:4194304',
             'previews' => 'nullable|array',
             'previews.*' => 'nullable|string|max:500',
@@ -91,6 +94,12 @@ class VideoController extends Controller
             'visibility',
         ]);
 
+        // Storage provider (defaults to local unless explicitly chosen)
+        $storageProvider = $request->input('storage_provider', 'local');
+        $updateData['storage_provider'] = in_array($storageProvider, ['terabox', 'pixeldrain'], true)
+            ? $storageProvider
+            : 'local';
+
         // Only overwrite these URL/path fields when the user explicitly provides a new value
         foreach (['thumbnail', 'poster', 'trailer_url', 'terabox_image', 'storage_folder'] as $optionalField) {
             $value = $request->input($optionalField);
@@ -100,17 +109,37 @@ class VideoController extends Controller
         }
 
         if ($request->hasFile('thumbnail_file')) {
-            $path = $request->file('thumbnail_file')->store('thumbnails', 'public');
+            $file = $request->file('thumbnail_file');
+            $path = $file->store('thumbnails', 'public');
             $updateData['thumbnail'] = asset('storage/' . $path);
+
+            $remoteRef = PixeldrainImageStore::upload(
+                $file,
+                'thumb-' . $video->slug . '.' . $file->getClientOriginalExtension()
+            );
+
+            if ($remoteRef) {
+                $updateData['thumbnail'] = $remoteRef;
+            }
         }
 
         if ($request->hasFile('poster_file')) {
-            $path = $request->file('poster_file')->store('posters', 'public');
+            $file = $request->file('poster_file');
+            $path = $file->store('posters', 'public');
             $updateData['poster'] = asset('storage/' . $path);
+
+            $remoteRef = PixeldrainImageStore::upload(
+                $file,
+                'poster-' . $video->slug . '.' . $file->getClientOriginalExtension()
+            );
+
+            if ($remoteRef) {
+                $updateData['poster'] = $remoteRef;
+            }
         }
 
         // Handle TeraBox Remote path mapping
-        if (!empty($updateData['storage_folder'])) {
+        if (!empty($updateData['storage_folder']) && $storageProvider === 'terabox') {
             $remotePrefix = rtrim(config('terabox.remote_dir', '/Apps/Krettel'), '/');
             $path = trim($updateData['storage_folder']);
 
@@ -128,6 +157,16 @@ class VideoController extends Controller
 
             $updateData['storage_folder'] = $path;
             $updateData['video_url'] = 'terabox-remote';
+        }
+
+        // Handle Pixeldrain file ID mapping
+        if ($storageProvider === 'pixeldrain') {
+            $pdId = trim((string) $request->input('pixeldrain_file_id'));
+
+            if ($pdId !== '') {
+                $updateData['storage_folder'] = static::extractPixeldrainId($pdId);
+                $updateData['video_url'] = 'pixeldrain-remote';
+            }
         }
 
         $video->update($updateData);
@@ -149,7 +188,18 @@ class VideoController extends Controller
             foreach ($request->file('preview_files') as $file) {
                 if ($file) {
                     $path = $file->store('previews', 'public');
-                    $previews[] = asset('storage/' . $path);
+                    $previewUrl = asset('storage/' . $path);
+
+                    $remoteRef = PixeldrainImageStore::upload(
+                        $file,
+                        'preview-' . $video->slug . '-' . uniqid() . '.' . $file->getClientOriginalExtension()
+                    );
+
+                    if ($remoteRef) {
+                        $previewUrl = $remoteRef;
+                    }
+
+                    $previews[] = $previewUrl;
                 }
             }
         }
@@ -159,6 +209,24 @@ class VideoController extends Controller
 
         return redirect()->route('admin.videos.index')
             ->with('success', 'Video updated successfully.');
+    }
+
+    /**
+     * Normalise a Pixeldrain link or bare ID into the raw file ID.
+     */
+    public static function extractPixeldrainId(string $value): string
+    {
+        $value = trim($value);
+
+        if (preg_match('#/u/([A-Za-z0-9_\-]+)#', $value, $m)) {
+            return $m[1];
+        }
+
+        if (preg_match('#/api/file/([A-Za-z0-9_\-]+)#', $value, $m)) {
+            return $m[1];
+        }
+
+        return $value;
     }
 
     /**
@@ -177,6 +245,19 @@ class VideoController extends Controller
                 \Illuminate\Support\Facades\Log::warning('[TERABOX-DELETE] Failed to delete remote file.', [
                     'video_id' => $video->id,
                     'remote_path' => $video->storage_folder,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // If the video is stored on Pixeldrain, remove the remote file too.
+        if ($video->storage_provider === 'pixeldrain' && $video->storage_folder) {
+            try {
+                app(\App\Services\PixeldrainClient::class)->delete($video->storage_folder);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[PIXELDRAIN-DELETE] Failed to delete remote file.', [
+                    'video_id' => $video->id,
+                    'file_id' => $video->storage_folder,
                     'error' => $e->getMessage(),
                 ]);
             }

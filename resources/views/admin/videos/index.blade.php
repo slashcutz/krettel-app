@@ -26,7 +26,7 @@
                         <tr class="border-b border-border hover:bg-secondary/30 transition-colors">
                             <td class="px-6 py-4 flex items-center space-x-3">
                                 <div class="w-16 h-10 bg-secondary rounded overflow-hidden flex-shrink-0">
-                                    <img src="{{ $video->thumbnail ?? 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover">
+                                    <img src="{{ $video->thumbnail ? \App\Support\TeraBoxImage::url($video->thumbnail ?: $video->poster ?: $video->terabox_image, 'video', $video->id) : 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover">
                                 </div>
                                 <div class="font-medium text-white line-clamp-1" title="{{ $video->title }}">
                                     {{ Str::limit($video->title, 40) }}
@@ -68,7 +68,7 @@
             <div class="p-4">
                 <div class="flex items-start gap-3">
                     <div class="w-24 h-14 bg-secondary rounded overflow-hidden flex-shrink-0">
-                        <img src="{{ $video->thumbnail ?? 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover">
+                        <img src="{{ $video->thumbnail ? \App\Support\TeraBoxImage::url($video->thumbnail ?: $video->poster ?: $video->terabox_image, 'video', $video->id) : 'https://via.placeholder.com/160x100?text=No+Thumbnail' }}" class="w-full h-full object-cover">
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white line-clamp-2">{{ $video->title }}</p>

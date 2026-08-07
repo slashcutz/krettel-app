@@ -30,29 +30,55 @@
                 </div>
 
                 <!-- Video File Source / Mapping (Direct Upload vs Manual Upload) -->
-                <div class="p-4 bg-zinc-950/40 border border-zinc-800/80 rounded-xl space-y-4" x-data="{ teraboxSource: '{{ $video->storage_folder ? 'manual' : 'direct' }}' }">
+                <div class="p-4 bg-zinc-950/40 border border-zinc-800/80 rounded-xl space-y-4" x-data="{ provider: '{{ old('storage_provider', $video->storage_provider ?? 'local') }}', teraboxSource: '{{ $video->storage_folder ? 'manual' : 'direct' }}' }">
                     <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
                         <h3 class="text-sm font-bold text-white uppercase tracking-wide">Video Source</h3>
-                        
-                        <!-- Toggle Buttons -->
+
+                        <!-- Provider Toggle Buttons -->
                         <div class="flex bg-zinc-900 rounded-lg p-0.5 border border-zinc-800">
-                            <button type="button" @click="teraboxSource = 'direct'" class="px-3 py-1.5 rounded-md text-[10px] font-bold transition-all" :class="teraboxSource === 'direct' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-white'">Direct Upload</button>
-                            <button type="button" @click="teraboxSource = 'manual'" class="px-3 py-1.5 rounded-md text-[10px] font-bold transition-all" :class="teraboxSource === 'manual' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-white'">Manual Upload</button>
+                            <button type="button" @click="provider = 'pixeldrain'" class="px-3 py-1.5 rounded-md text-[10px] font-bold transition-all" :class="provider === 'pixeldrain' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-white'">Pixeldrain</button>
+                            <button type="button" @click="provider = 'terabox'" class="px-3 py-1.5 rounded-md text-[10px] font-bold transition-all" :class="provider === 'terabox' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-white'">TeraBox</button>
+                            <button type="button" @click="provider = 'local'; teraboxSource = 'direct'" class="px-3 py-1.5 rounded-md text-[10px] font-bold transition-all" :class="provider === 'local' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-white'">Local</button>
                         </div>
                     </div>
 
+                    <input type="hidden" name="storage_provider" :value="provider">
+
                     <div class="grid grid-cols-1 gap-4">
-                        <!-- Direct Upload -->
-                        <div x-show="teraboxSource === 'direct'" x-transition>
+                        <!-- Local / Direct Upload -->
+                        <div x-show="provider === 'local'" x-transition>
                             <label for="video_file" class="block text-xs font-medium text-gray-400 mb-1.5">Replace Local Video File (Optional)</label>
                             <input type="file" name="video_file" id="video_file" accept="video/*" class="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-primary file:text-white hover:file:bg-red-600 block w-full cursor-pointer">
                         </div>
 
-                        <!-- Manual Upload -->
-                        <div x-show="teraboxSource === 'manual'" x-transition>
-                            <label for="storage_folder" class="block text-xs font-medium text-gray-400 mb-1.5">TeraBox Remote File Path</label>
-                            <input type="text" name="storage_folder" id="storage_folder" value="{{ old('storage_folder', $video->storage_folder) }}" placeholder="e.g. /Apps/Krettel/my-file.mp4" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
-                            <p class="text-[9px] text-muted mt-1.5">Enter the file name or complete path of the file uploaded directly to your TeraBox account inside <code>/Apps/Krettel/</code>.</p>
+                        <!-- TeraBox -->
+                        <div x-show="provider === 'terabox'" x-transition>
+                            <div class="flex items-center justify-between border-b border-zinc-800/80 pb-2 mb-3">
+                                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">TeraBox Source</span>
+                                <div class="flex bg-zinc-900 rounded-lg p-0.5 border border-zinc-800">
+                                    <button type="button" @click="teraboxSource = 'direct'" class="px-3 py-1.5 rounded-md text-[10px] font-bold transition-all" :class="teraboxSource === 'direct' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-white'">Upload File</button>
+                                    <button type="button" @click="teraboxSource = 'manual'" class="px-3 py-1.5 rounded-md text-[10px] font-bold transition-all" :class="teraboxSource === 'manual' ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-white'">Link Existing</button>
+                                </div>
+                            </div>
+
+                            <div x-show="teraboxSource === 'direct'" x-transition>
+                                <label for="video_file" class="block text-xs font-medium text-gray-400 mb-1.5">Upload Video File</label>
+                                <input type="file" name="video_file" id="video_file" accept="video/*" class="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-primary file:text-white hover:file:bg-red-600 block w-full cursor-pointer">
+                                <p class="text-[9px] text-muted mt-1.5">The file is uploaded to your TeraBox account and streamed via HLS (free accounts are capped at 480p).</p>
+                            </div>
+
+                            <div x-show="teraboxSource === 'manual'" x-transition>
+                                <label for="storage_folder" class="block text-xs font-medium text-gray-400 mb-1.5">TeraBox Remote File Path</label>
+                                <input type="text" name="storage_folder" id="storage_folder" value="{{ old('storage_folder', $video->storage_folder) }}" placeholder="e.g. /Apps/Krettel/my-file.mp4" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                                <p class="text-[9px] text-muted mt-1.5">Enter the file name or complete path of the file uploaded directly to your TeraBox account inside <code>/Apps/Krettel/</code>.</p>
+                            </div>
+                        </div>
+
+                        <!-- Pixeldrain -->
+                        <div x-show="provider === 'pixeldrain'" x-transition>
+                            <label for="pixeldrain_file_id" class="block text-xs font-medium text-gray-400 mb-1.5">Pixeldrain File ID or URL</label>
+                            <input type="text" name="pixeldrain_file_id" id="pixeldrain_file_id" value="{{ old('pixeldrain_file_id', $video->storage_provider === 'pixeldrain' ? $video->storage_folder : '') }}" placeholder="e.g. abc123xyz or https://pixeldrain.net/u/abc123xyz" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                            <p class="text-[9px] text-muted mt-1.5">Paste the file ID or a pixeldrain link. The video is streamed at its original resolution (upload 720p/1080p for best quality). No download options.</p>
                         </div>
                     </div>
                 </div>
@@ -96,12 +122,16 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6" 
                      x-data="{
                          thumbPreview: '{{ $video->thumbnail }}',
+                         thumbDisplay: '{{ $video->thumbnail ? \App\Support\TeraBoxImage::url($video->thumbnail, 'video', $video->id) : '' }}',
                          posterPreview: '{{ $video->poster }}',
+                         posterDisplay: '{{ $video->poster ? \App\Support\TeraBoxImage::url($video->poster, 'video', $video->id) : '' }}',
                          triggerClick(id) { document.getElementById(id).click() },
                          onFileChange(e, key) {
                              const file = e.target.files[0];
                              if (file) {
-                                 this[key] = URL.createObjectURL(file);
+                                 const url = URL.createObjectURL(file);
+                                 if (key === 'thumbPreview') { this.thumbPreview = url; this.thumbDisplay = url; }
+                                 if (key === 'posterPreview') { this.posterPreview = url; this.posterDisplay = url; }
                              }
                          }
                      }">
@@ -110,8 +140,8 @@
                     <div class="space-y-2">
                         <label class="block text-sm font-medium text-white">Thumbnail</label>
                         <div @click="triggerClick('thumbnail_file')" class="relative border-2 border-dashed border-border rounded-xl aspect-video overflow-hidden bg-secondary/50 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary transition group">
-                            <template x-if="thumbPreview">
-                                <img :src="thumbPreview" class="absolute inset-0 w-full h-full object-cover">
+                            <template x-if="thumbDisplay">
+                                <img :src="thumbDisplay" class="absolute inset-0 w-full h-full object-cover">
                             </template>
                             <div class="relative z-10 p-4 bg-black/60 rounded-xl m-2 text-center group-hover:bg-primary/90 transition-colors">
                                 <p class="text-xs font-bold text-white">Choose / Upload Image</p>
@@ -119,7 +149,7 @@
                             </div>
                             <input type="file" name="thumbnail_file" id="thumbnail_file" accept="image/*" @change="onFileChange($event, 'thumbPreview')" class="hidden">
                         </div>
-                        <input type="url" name="thumbnail" x-model="thumbPreview" placeholder="Or paste image URL" class="bg-secondary border border-border text-white text-xs rounded-lg focus:ring-primary focus:border-primary block w-full p-2">
+                        <input type="url" name="thumbnail" x-model="thumbPreview" @input="thumbDisplay = thumbPreview" placeholder="Or paste image URL" class="bg-secondary border border-border text-white text-xs rounded-lg focus:ring-primary focus:border-primary block w-full p-2">
                     </div>
 
                     <!-- Poster File & URL -->
@@ -138,16 +168,16 @@
                         <input type="url" name="poster" x-model="posterPreview" placeholder="Or paste image URL" class="bg-secondary border border-border text-white text-xs rounded-lg focus:ring-primary focus:border-primary block w-full p-2">
                     </div>
 
-                    <!-- Trailer & TeraBox Image URL -->
+                    <!-- Trailer & Image URL -->
                     <div class="space-y-4 flex flex-col justify-between">
                         <div>
                             <label for="trailer_url" class="block text-sm font-medium text-white mb-2">Trailer URL</label>
                             <input type="url" name="trailer_url" id="trailer_url" value="{{ old('trailer_url', $video->trailer_url) }}" placeholder="Paste Trailer URL" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
                         </div>
                         <div>
-                            <label for="terabox_image" class="block text-sm font-medium text-white mb-2">TeraBox Image URL</label>
-                            <input type="text" name="terabox_image" id="terabox_image" value="{{ old('terabox_image', $video->terabox_image) }}" placeholder="https://... or terabox://remote/path" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
-                            <p class="text-[10px] text-muted mt-1.5">Image hosted on TeraBox. Paste direct link or <code>terabox://</code> path.</p>
+                            <label for="terabox_image" class="block text-sm font-medium text-white mb-2">Image URL</label>
+                            <input type="text" name="terabox_image" id="terabox_image" value="{{ old('terabox_image', $video->terabox_image) }}" placeholder="https://... or pixeldrain://file-id" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                            <p class="text-[10px] text-muted mt-1.5">Uploaded images are stored on Pixeldrain. Paste a direct link, <code>pixeldrain://</code> id, or legacy <code>terabox://</code> path.</p>
                         </div>
                     </div>
                 </div>

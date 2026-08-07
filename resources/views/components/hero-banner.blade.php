@@ -15,6 +15,10 @@
     $duration = data_get($bannerVideo, 'duration', '');
     $match = data_get($bannerVideo, 'match', '98% Match');
 
+    if ($image !== '') {
+        $image = \App\Support\TeraBoxImage::url($image, $isBanner ? 'banner' : 'video', $isBanner ? $video->id : data_get($bannerVideo, 'id')) ?? $image;
+    }
+
     if ($image === '') {
         $image = 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=2070&auto=format&fit=crop';
     }

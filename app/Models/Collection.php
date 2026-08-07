@@ -16,15 +16,7 @@ class Collection extends Model
             return null;
         }
 
-        if (str_starts_with($value, 'terabox://')) {
-            return route('terabox.image', ['model' => 'collection', 'id' => $this->id]);
-        }
-
-        if (str_starts_with($value, 'http')) {
-            return $value;
-        }
-
-        return asset('storage/' . $value);
+        return \App\Support\TeraBoxImage::url($value, 'collection', $this->id);
     }
 
     public function user()

@@ -48,9 +48,9 @@
                 </div>
 
                 <div>
-                    <label for="terabox_image" class="block text-sm font-medium text-white mb-2">TeraBox Image URL</label>
-                    <input type="text" name="terabox_image" id="terabox_image" value="{{ old('terabox_image') }}" placeholder="https://... or terabox://remote/path" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
-                    <p class="text-xs text-muted mt-1.5">Optional. Overrides the cover image. Paste a TeraBox image link or a <code>terabox://</code> path.</p>
+                    <label for="terabox_image" class="block text-sm font-medium text-white mb-2">Image URL</label>
+                    <input type="text" name="terabox_image" id="terabox_image" value="{{ old('terabox_image') }}" placeholder="https://... or pixeldrain://file-id" class="bg-secondary border border-border text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5">
+                    <p class="text-xs text-muted mt-1.5">Optional. Overrides the cover image. Paste a direct link, <code>pixeldrain://</code> id, or legacy <code>terabox://</code> path.</p>
                     @error('terabox_image') <p class="text-primary text-xs mt-1">{{ $message }}</p> @enderror
                 </div>
 
