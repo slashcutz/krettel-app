@@ -99,19 +99,9 @@
                     isDirectStream: false,
                     streamQuality: '480',
                     downloadMode: null,
-                    pinchScale: 1,
-                    pinchTx: 0,
-                    pinchTy: 0,
-                    pinchOx: 0,
-                    pinchOy: 0,
+                    zoomToFill: false,
                     pinchStartDist: 0,
-                    pinchBaseScale: 1,
                     pinchActive: false,
-                    pinchPanning: false,
-                    pinchPanStartX: 0,
-                    pinchPanStartY: 0,
-                    pinchPanStartTx: 0,
-                    pinchPanStartTy: 0,
                     lastTapTime: 0,
                     pinchSuppressClick: false,
 
@@ -647,114 +637,56 @@
                         // documents intent and gives a hook for future listeners.
                     },
 
+                    toggleZoom() {
+                        this.zoomToFill = !this.zoomToFill;
+                        const video = this.$refs.video;
+                        if (video) {
+                            video.style.objectFit = this.zoomToFill ? 'cover' : 'contain';
+                            video.style.transform = '';
+                            video.style.transformOrigin = '';
+                        }
+                    },
+
+                    resetPinch() {
+                        this.zoomToFill = false;
+                        this.pinchActive = false;
+                        this.pinchSuppressClick = false;
+                        if (this.$refs.video) {
+                            this.$refs.video.style.objectFit = 'contain';
+                            this.$refs.video.style.transform = '';
+                        }
+                    },
+
                     pinchTouchDist(touches) {
                         const a = touches[0];
                         const b = touches[1];
                         return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
                     },
 
-                    pinchTouchMid(touches) {
-                        const rect = this.$refs.video.getBoundingClientRect();
-                        const a = touches[0];
-                        const b = touches[1];
-                        return {
-                            x: (a.clientX + b.clientX) / 2 - rect.left,
-                            y: (a.clientY + b.clientY) / 2 - rect.top,
-                        };
-                    },
-
-                    applyPinchTransform() {
-                        const video = this.$refs.video;
-                        if (!video) return;
-                        if (this.pinchScale <= 1 && this.pinchTx === 0 && this.pinchTy === 0) {
-                            video.style.transform = '';
-                            video.style.transformOrigin = '';
-                            video.style.touchAction = '';
-                        } else {
-                            video.style.transformOrigin = this.pinchOx + 'px ' + this.pinchOy + 'px';
-                            video.style.transform = 'translate(' + this.pinchTx + 'px, ' + this.pinchTy + 'px) scale(' + this.pinchScale + ')';
-                            video.style.touchAction = 'none';
-                        }
-                    },
-
-                    resetPinch() {
-                        this.pinchScale = 1;
-                        this.pinchTx = 0;
-                        this.pinchTy = 0;
-                        this.pinchActive = false;
-                        this.pinchStartDist = 0;
-                        this.pinchPanning = false;
-                        this.pinchSuppressClick = false;
-                        this.applyPinchTransform();
-                    },
-
                     onVideoTouchStart(e) {
-                        const video = this.$refs.video;
-                        if (!video) return;
-
                         if (e.touches.length >= 2) {
                             this.pinchActive = true;
-                            this.pinchPanning = false;
                             this.pinchStartDist = this.pinchTouchDist(e.touches);
-                            this.pinchBaseScale = this.pinchScale;
-                            const mid = this.pinchTouchMid(e.touches);
-                            this.pinchOx = mid.x;
-                            this.pinchOy = mid.y;
-                            video.style.touchAction = 'none';
                             e.preventDefault();
-                        } else if (e.touches.length === 1) {
-                            this.pinchPanStartX = e.touches[0].clientX;
-                            this.pinchPanStartY = e.touches[0].clientY;
-                            this.pinchPanStartTx = this.pinchTx;
-                            this.pinchPanStartTy = this.pinchTy;
                         }
                     },
 
                     onVideoTouchMove(e) {
-                        const video = this.$refs.video;
-                        if (!video) return;
-
                         if (this.pinchActive && e.touches.length >= 2) {
                             const dist = this.pinchTouchDist(e.touches);
                             const base = this.pinchStartDist || 1;
-                            const scale = Math.max(1, Math.min(2.2, this.pinchBaseScale * (dist / base)));
-                            this.pinchScale = scale;
-                            const mid = this.pinchTouchMid(e.touches);
-                            this.pinchOx = mid.x;
-                            this.pinchOy = mid.y;
-                            if (scale <= 1) {
-                                this.pinchTx = 0;
-                                this.pinchTy = 0;
+                            if (dist > base * 1.2) {
+                                if (!this.zoomToFill) this.toggleZoom();
+                            } else if (dist < base * 0.8) {
+                                if (this.zoomToFill) this.toggleZoom();
                             }
-                            this.applyPinchTransform();
-                            e.preventDefault();
-                        } else if (e.touches.length === 1 && this.pinchScale > 1) {
-                            const dx = e.touches[0].clientX - this.pinchPanStartX;
-                            const dy = e.touches[0].clientY - this.pinchPanStartY;
-                            if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
-                                this.pinchPanning = true;
-                            }
-                            this.pinchTx = this.pinchPanStartTx + dx;
-                            this.pinchTy = this.pinchPanStartTy + dy;
-                            this.applyPinchTransform();
                             e.preventDefault();
                         }
                     },
 
                     onVideoTouchEnd(e) {
-                        const video = this.$refs.video;
-                        if (!video) return;
-
-                        if (this.pinchActive && e.touches.length < 2) {
+                        if (e.touches.length < 2) {
                             this.pinchActive = false;
-                            this.pinchStartDist = 0;
-                            if (this.pinchScale <= 1) {
-                                this.pinchTx = 0;
-                                this.pinchTy = 0;
-                                this.pinchPanning = false;
-                                this.applyPinchTransform();
-                            }
-                            return;
                         }
 
                         if (e.touches.length === 0 && this.isMobileOrTablet()) {
@@ -764,17 +696,7 @@
 
                             if (isDoubleTap) {
                                 this.pinchSuppressClick = true;
-                                if (this.pinchScale > 1) {
-                                    this.resetPinch();
-                                } else {
-                                    const rect = video.getBoundingClientRect();
-                                    this.pinchOx = Math.max(0, e.changedTouches[0].clientX - rect.left);
-                                    this.pinchOy = Math.max(0, e.changedTouches[0].clientY - rect.top);
-                                    this.pinchScale = 2.5;
-                                    this.pinchTx = 0;
-                                    this.pinchTy = 0;
-                                    this.applyPinchTransform();
-                                }
+                                this.toggleZoom();
                             }
                         }
                     },

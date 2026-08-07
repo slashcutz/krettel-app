@@ -280,28 +280,43 @@
                                 </div>
                             </div>
 
-                            <!-- Inline upload progress (mobile fallback) -->
-                            <div x-show="mobileUploading" class="mb-6 rounded-xl border border-primary/30 bg-secondary/40 p-5">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="flex items-center space-x-3">
-                                        <svg class="w-5 h-5 text-primary animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                                        <span class="text-white font-semibold text-sm">Uploading Video</span>
+                            <!-- Premium Mobile Upload Overlay -->
+                            <div x-show="mobileUploading" style="display: none;" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl p-6">
+                                <div class="w-full max-w-sm flex flex-col items-center text-center">
+                                    <!-- Animated Circular Progress -->
+                                    <div class="relative w-32 h-32 mb-8">
+                                        <svg class="absolute inset-0 w-full h-full text-white/10" fill="none" viewBox="0 0 100 100">
+                                            <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="6"></circle>
+                                        </svg>
+                                        <svg class="absolute inset-0 w-full h-full text-primary drop-shadow-[0_0_15px_rgba(229,9,20,0.8)]" fill="none" viewBox="0 0 100 100" style="transform: rotate(-90deg);">
+                                            <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="6" stroke-dasharray="283" :stroke-dashoffset="283 - (283 * mobileProgress / 100)" stroke-linecap="round" class="transition-all duration-300 ease-out"></circle>
+                                        </svg>
+                                        <div class="absolute inset-0 flex items-center justify-center">
+                                            <span class="text-3xl font-bold text-white" x-text="mobileProgress + '%'"></span>
+                                        </div>
                                     </div>
-                                    <span class="text-white font-bold text-sm" x-text="mobileProgress + '%'"></span>
+                                    
+                                    <h3 class="text-2xl font-bold text-white mb-2">Uploading Video</h3>
+                                    <p class="text-sm text-gray-400 mb-8" x-text="mobileStatus"></p>
+                                    
+                                    <div class="w-full bg-secondary/50 rounded-2xl p-5 border border-white/5 space-y-4 shadow-xl">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Speed</span>
+                                            <span class="text-white font-bold text-sm" x-text="mobileSpeed"></span>
+                                        </div>
+                                        <div class="w-full h-px bg-white/10"></div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Time Left</span>
+                                            <span class="text-white font-bold text-sm" x-text="mobileEta"></span>
+                                        </div>
+                                    </div>
+                                    
+                                    <p class="mt-8 text-xs text-gray-500 max-w-[250px] mx-auto">Please keep the app open and do not lock your screen until the upload finishes.</p>
                                 </div>
-                                <div class="w-full bg-zinc-800 rounded-full h-2.5 mb-2 overflow-hidden">
-                                    <div class="bg-primary h-2.5 rounded-full transition-all duration-300" :style="`width: ${mobileProgress}%`"></div>
-                                </div>
-                                <p class="text-xs text-muted" x-text="mobileStatus"></p>
-                                <div class="flex justify-between text-[11px] text-muted mt-1.5">
-                                    <span x-text="'Speed: ' + mobileSpeed"></span>
-                                    <span x-text="'ETA: ' + mobileEta"></span>
-                                </div>
-                                <p class="text-[10px] text-muted mt-2">Keep this page open until the upload finishes.</p>
                             </div>
 
                             <!-- Action Buttons (fixed bottom bar on mobile/tablet, static on desktop) -->
-                            <div class="fixed bottom-24 inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur-md px-4 py-3 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 sm:justify-between lg:static lg:mt-8 lg:border-t lg:bg-transparent lg:backdrop-blur-none lg:px-0 lg:py-0 lg:pt-4">
+                            <div x-show="!mobileUploading" class="fixed bottom-24 inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur-md px-4 py-3 flex flex-col-reverse sm:flex-row gap-3 sm:gap-4 sm:justify-between lg:static lg:mt-8 lg:border-t lg:bg-transparent lg:backdrop-blur-none lg:px-0 lg:py-0 lg:pt-4">
                                 <button type="button" @click="step--" x-show="step > 1" class="px-6 py-3 rounded-lg border border-border text-white hover:bg-secondary transition-colors w-full sm:w-auto">
                                     Back
                                 </button>
@@ -527,16 +542,21 @@
                             this.mobileStatus = 'Uploading to server... (' + this.formatSize(e.loaded) + ' / ' + this.formatSize(e.total) + ')';
 
                             const now = Date.now();
-                            const timeDiff = (this.mobileLastTime ? (now - this.mobileLastTime) / 1000 : 0);
-                            if (timeDiff > 0.5) {
-                                const bytesDiff = e.loaded - this.mobileLastLoaded;
-                                if (bytesDiff > 0 && timeDiff > 0) {
-                                    const currentSpeed = bytesDiff / timeDiff;
-                                    this.mobileSpeed = this.formatSpeed(currentSpeed);
-                                    this.mobileEta = this.formatEta((e.total - e.loaded) / currentSpeed);
-                                }
-                                this.mobileLastLoaded = e.loaded;
+                            if (!this.mobileLastTime) {
                                 this.mobileLastTime = now;
+                                this.mobileLastLoaded = e.loaded;
+                            } else {
+                                const timeDiff = (now - this.mobileLastTime) / 1000;
+                                if (timeDiff > 0.5) {
+                                    const bytesDiff = e.loaded - this.mobileLastLoaded;
+                                    if (bytesDiff > 0) {
+                                        const currentSpeed = bytesDiff / timeDiff;
+                                        this.mobileSpeed = this.formatSpeed(currentSpeed);
+                                        this.mobileEta = this.formatEta((e.total - e.loaded) / currentSpeed);
+                                    }
+                                    this.mobileLastLoaded = e.loaded;
+                                    this.mobileLastTime = now;
+                                }
                             }
 
                             // Browser -> server leg is done; the server is now
