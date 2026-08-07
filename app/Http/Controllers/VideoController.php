@@ -375,6 +375,118 @@ class VideoController extends Controller
     }
 
     /**
+     * Stream the video transcoded to 720p on the fly.
+     *
+     * Like streamDirect(), the source is the TeraBox download link (so it is
+     * still throttled and "slow"), but the bytes are piped through FFmpeg and
+     * re-encoded to 720p before reaching the player. This is the only way to
+     * get true 720p on a free TeraBox account, whose streaming endpoint caps
+     * transcoded HLS at 480p.
+     */
+    public function stream720(Video $video)
+    {
+        if ($video->video_url !== 'terabox-remote' || ! $video->storage_folder) {
+            abort(404);
+        }
+
+        $ffmpeg = config('ffmpeg.ffmpeg');
+        if (! $ffmpeg || (str_contains($ffmpeg, DIRECTORY_SEPARATOR) && ! file_exists($ffmpeg))) {
+            Log::error('[STREAM-720] FFmpeg not available for video ' . $video->id);
+            abort(502, 'Transcoder unavailable.');
+        }
+
+        return response()->stream(function () use ($video, $ffmpeg) {
+            @ini_set('zlib.output_compression', 'Off');
+            @ini_set('max_execution_time', '0');
+            if (function_exists('apache_setenv')) {
+                @apache_setenv('no-gzip', 1);
+            }
+            @ob_implicit_flush(true);
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            $terabox = app(TeraBoxClient::class);
+            $dlink = null;
+
+            for ($attempt = 0; $attempt < 2; $attempt++) {
+                try {
+                    $dlink = static::resolveDirectLink($video, $terabox);
+                    break;
+                } catch (\Throwable $e) {
+                    Log::warning('[STREAM-720] dlink resolve attempt ' . ($attempt + 1) . ' failed for video ' . $video->id . ': ' . $e->getMessage());
+                    Cache::store('file')->forget('terabox_dlink_' . $video->id);
+                }
+            }
+
+            if (! $dlink) {
+                echo 'Stream unavailable.';
+                return;
+            }
+
+            $args = [
+                $ffmpeg,
+                '-nostdin',
+                '-loglevel', 'error',
+                '-reconnect', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_delay_max', '5',
+                '-user_agent', config('terabox.user_agent'),
+                '-headers', "Referer: https://www.1024terabox.com/\r\n",
+                '-i', $dlink,
+                '-vf', 'scale=-2:min(720\,ih)',
+                '-c:v', 'libx264',
+                '-preset', 'veryfast',
+                '-crf', '26',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-ac', '2',
+                '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+                '-f', 'mp4',
+                'pipe:1',
+            ];
+
+            $process = proc_open($args, [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ], $pipes);
+
+            if (! is_resource($process)) {
+                echo 'Stream unavailable.';
+                return;
+            }
+
+            // ffmpeg needs no stdin.
+            fclose($pipes[0]);
+
+            $exitCode = null;
+            while (! feof($pipes[1])) {
+                $chunk = fread($pipes[1], 65536);
+                if ($chunk !== false && $chunk !== '') {
+                    echo $chunk;
+                    flush();
+                }
+            }
+            fclose($pipes[1]);
+
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+            $exitCode = proc_close($process);
+
+            if ($exitCode !== 0) {
+                Log::error('[STREAM-720] ffmpeg exited with code ' . $exitCode . ' for video ' . $video->id, ['stderr' => trim($stderr)]);
+            }
+        }, 200, [
+            'Content-Type' => 'video/mp4',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+            'Accept-Ranges' => 'none',
+        ]);
+    }
+
+    /**
      * Resolve a direct download link for a TeraBox video, caching it briefly.
      */
     protected static function resolveDirectLink(Video $video, TeraBoxClient $terabox): string

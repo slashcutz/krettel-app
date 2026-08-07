@@ -77,6 +77,7 @@
                     audioTrack: -1,
                     isDirectStream: false,
                     streamQuality: '480',
+                    downloadMode: null,
 
                     initPlayer() {
                         this.volume = this.$refs.video.volume;
@@ -304,9 +305,13 @@
 
                     toggleSourceQuality(type) {
                         this.showSettings = false;
-                        if (type === 'original') {
-                            if (this.isDirectStream) return;
+                        if (type === 'original' || type === 'slow720') {
+                            const route = type === 'original'
+                                ? "{{ route('video.stream.direct', $video->id) }}"
+                                : "{{ route('video.stream.transcode', $video->id) }}";
+                            if (this.isDirectStream && this.downloadMode === type) return;
                             this.isDirectStream = true;
+                            this.downloadMode = type;
 
                             const currentTime = this.$refs.video.currentTime;
                             const wasPlaying = !this.$refs.video.paused;
@@ -316,7 +321,7 @@
                                 this.hls = null;
                             }
 
-                            this.$refs.video.src = "{{ route('video.stream.direct', $video->id) }}";
+                            this.$refs.video.src = route;
                             this.$refs.video.load();
 
                             this.$refs.video.addEventListener('loadedmetadata', () => {
@@ -326,6 +331,7 @@
                         } else {
                             if (!this.isDirectStream && this.streamQuality === type) return;
                             this.isDirectStream = false;
+                            this.downloadMode = null;
                             this.streamQuality = type;
 
                             const currentTime = this.$refs.video.currentTime;
@@ -932,9 +938,13 @@
                                          <span class="text-sm" :class="{ 'text-primary font-bold': !isDirectStream && streamQuality === '720', 'text-gray-300': isDirectStream || streamQuality !== '720' }">720p (Fast)</span>
                                          <svg x-show="!isDirectStream && streamQuality === '720'" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                      </div>
+                                     <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('slow720')">
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': isDirectStream && downloadMode === 'slow720', 'text-gray-300': !isDirectStream || downloadMode !== 'slow720' }">720p (Slow)</span>
+                                         <svg x-show="isDirectStream && downloadMode === 'slow720'" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                     </div>
                                      <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="toggleSourceQuality('original')">
-                                         <span class="text-sm" :class="{ 'text-primary font-bold': isDirectStream, 'text-gray-300': !isDirectStream }">Original 1080p (Slow)</span>
-                                         <svg x-show="isDirectStream" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                         <span class="text-sm" :class="{ 'text-primary font-bold': isDirectStream && downloadMode === 'original', 'text-gray-300': !isDirectStream || downloadMode !== 'original' }">Original 1080p (Slow)</span>
+                                         <svg x-show="isDirectStream && downloadMode === 'original'" class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                                      </div>
                                  @else
                                      <div class="settings-item hover:bg-gray-800 transition-colors py-2.5" @click.stop="setQuality(-1)">
