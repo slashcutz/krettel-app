@@ -400,6 +400,22 @@
                         }
                     },
 
+                    onVideoClick() {
+                        this.togglePlay();
+                        if (this.isFullscreen) {
+                            // In fullscreen a click toggles the controls:
+                            // hide immediately if visible, otherwise show briefly.
+                            if (this.showControls) {
+                                clearTimeout(this.controlsTimeout);
+                                this.showControls = false;
+                            } else {
+                                this.showControlsForAWhile();
+                            }
+                        } else {
+                            this.showControlsForAWhile();
+                        }
+                    },
+
                     skip(seconds) {
                         this.$refs.video.currentTime = Math.max(0, Math.min(this.$refs.video.currentTime + seconds, this.duration));
                     },
@@ -804,11 +820,12 @@
                 <!-- Native Video Element -->
                 <video
                     x-ref="video"
-                    class="w-full h-full object-cover cursor-pointer"
+                    class="w-full h-full object-cover"
+                    :class="isFullscreen && !showControls ? 'cursor-none' : 'cursor-pointer'"
                     :style="isFullscreen ? 'width:100%!important;height:100%!important;object-fit:cover!important;' : ''"
                     preload="auto"
                     poster="{{ $posterUrl }}"
-                    @click="togglePlay()"
+                    @click="onVideoClick()"
                     @dblclick="toggleFullscreen()"
                     @timeupdate="updateProgress()"
                     @ended="isPlaying = false"
