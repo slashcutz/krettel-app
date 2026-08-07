@@ -43,6 +43,7 @@ class VideoUploadController extends Controller
                 'visibility' => 'required|string|in:public,private,draft,scheduled',
                 // Relaxed strict mimes check to allow mobile browsers sending MKV as application/octet-stream
                 'video_file' => 'nullable|file|max:4194304', 
+                'stitched_file_path' => 'nullable|string',
                 'thumbnail' => 'nullable|image|max:5120',
                 'terabox_image' => 'nullable|string|max:500',
                 'previews' => 'nullable|array',
@@ -65,7 +66,26 @@ class VideoUploadController extends Controller
 
         $stagingPath = null;
         $videoPath = null;
-        if (!$isLinked && $request->hasFile('video_file')) {
+        if (!$isLinked) {
+            if ($request->filled('stitched_file_path')) {
+                $stagingPath = $request->input('stitched_file_path');
+                $absolutePath = Storage::disk('local')->path($stagingPath);
+                $originalSize = file_exists($absolutePath) ? filesize($absolutePath) : 0;
+                $maxAllowed = (int) ini_get('upload_max_filesize'); // e.g. "2G" -> 2 (display only)
+
+                if ($storageProvider !== 'terabox' && $storageProvider !== 'pixeldrain') {
+                    $videoPath = 'videos/' . basename($stagingPath);
+                    Storage::disk('public')->put($videoPath, file_get_contents($absolutePath));
+                    unlink($absolutePath); // clean up
+                    $stagingPath = null;
+                    Log::channel('krettel')->info('[UPLOAD] Stitched video stored on local PUBLIC disk.', ['video_path' => $videoPath]);
+                } else {
+                    Log::channel('krettel')->info('[UPLOAD] Stitched video staged on local disk.', [
+                        'staging_path' => $stagingPath,
+                        'file_size_bytes' => $originalSize,
+                    ]);
+                }
+            } elseif ($request->hasFile('video_file')) {
             $file = $request->file('video_file');
             $originalSize = $file->getSize() ?? 0;
             $maxAllowed = (int) ini_get('upload_max_filesize'); // e.g. "2G" -> 2 (display only)
@@ -841,5 +861,58 @@ class VideoUploadController extends Controller
         }
 
         return ['time' => $time, 'level' => $level, 'message' => $message];
+    }
+
+    public function chunk(Request $request)
+    {
+        $uploadToken = $request->input('upload_token');
+        $chunkIndex = $request->input('chunk_index');
+        $totalChunks = $request->input('total_chunks');
+        $file = $request->file('chunk');
+        $filename = $request->input('original_filename', 'video.mp4');
+
+        if (!$uploadToken || $chunkIndex === null || !$file) {
+            return response()->json(['error' => 'Missing chunk data'], 400);
+        }
+
+        $chunkDir = storage_path('app/chunks/' . $uploadToken);
+        if (!file_exists($chunkDir)) {
+            mkdir($chunkDir, 0777, true);
+        }
+
+        $chunkPath = $chunkDir . '/' . $chunkIndex;
+        move_uploaded_file($file->getPathname(), $chunkPath);
+
+        // Check if all chunks received
+        $chunks = array_diff(scandir($chunkDir), array('..', '.'));
+        if (count($chunks) == $totalChunks) {
+            // Stitch
+            if (!file_exists(storage_path('app/pending-uploads'))) {
+                mkdir(storage_path('app/pending-uploads'), 0777, true);
+            }
+            $cleanName = preg_replace('/[^a-zA-Z0-9.\-_]/', '', $filename);
+            $stitchedRelative = 'pending-uploads/' . $uploadToken . '_' . $cleanName;
+            $finalPath = storage_path('app/' . $stitchedRelative);
+            
+            $out = fopen($finalPath, 'wb');
+            for ($i = 0; $i < $totalChunks; $i++) {
+                $inPath = $chunkDir . '/' . $i;
+                if (file_exists($inPath)) {
+                    $in = fopen($inPath, 'rb');
+                    stream_copy_to_stream($in, $out);
+                    fclose($in);
+                    unlink($inPath);
+                }
+            }
+            fclose($out);
+            rmdir($chunkDir);
+
+            return response()->json([
+                'status' => 'completed',
+                'stitched_file_path' => $stitchedRelative
+            ]);
+        }
+
+        return response()->json(['status' => 'chunk_received']);
     }
 }

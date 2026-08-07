@@ -1,0 +1,1 @@
+<?php $opts = ['http' => ['ignore_errors' => true], 'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]; $ctx = stream_context_create($opts); $fp = @fopen('https://pixeldrain.com/api/file/F9N8qrME/info', 'r', false, $ctx); if ($fp) { var_dump(stream_get_meta_data($fp)); } else { echo 'fopen failed'; }

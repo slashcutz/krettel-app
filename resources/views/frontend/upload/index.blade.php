@@ -519,131 +519,151 @@
                     this.mobileLastLoaded = 0;
                     this.mobileLastTime = 0;
 
-                    // Token lets the server report server-side progress (after the
-                    // browser -> server leg, the server pushes to Pixeldrain).
                     let uploadToken = '';
-                    if (storageChoice === 'pixeldrain') {
-                        const arr = new Uint32Array(2);
-                        (window.crypto || window.msCrypto).getRandomValues(arr);
-                        uploadToken = arr[0].toString(36) + arr[1].toString(36) + Date.now().toString(36);
-                        formData.append('upload_token', uploadToken);
-                    }
+                    const arr = new Uint32Array(2);
+                    (window.crypto || window.msCrypto).getRandomValues(arr);
+                    uploadToken = arr[0].toString(36) + arr[1].toString(36) + Date.now().toString(36);
+                    formData.append('upload_token', uploadToken);
 
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', form.action, true);
-                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-                    xhr.setRequestHeader('Accept', 'application/json');
+                    const videoFile = this.videoFile;
+                    const isFileMode = (videoFile && videoFile instanceof File && videoFile.size > 0);
 
-                    let syncTimer = null;
+                    const submitFinalForm = (finalFormData) => {
+                        this.mobileStatus = 'Saving to database...';
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', form.action, true);
+                        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                        xhr.setRequestHeader('Accept', 'application/json');
 
-                    xhr.upload.onprogress = (e) => {
-                        if (e.lengthComputable) {
-                            this.mobileProgress = Math.round((e.loaded / e.total) * 100);
-                            this.mobileStatus = 'Uploading to server... (' + this.formatSize(e.loaded) + ' / ' + this.formatSize(e.total) + ')';
+                        let syncTimer = null;
+                        if (storageChoice === 'pixeldrain' && isFileMode) {
+                            const url = PROGRESS_URL.replace('__TOKEN__', uploadToken);
+                            const tick = () => {
+                                fetch(url, { headers: { 'Accept': 'application/json' } })
+                                    .then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status))
+                                    .then(data => {
+                                        if (data.active) {
+                                            this.mobileProgress = data.percent || this.mobileProgress;
+                                            this.mobileStatus = data.phase || 'Syncing to Pixeldrain...';
+                                            if (data.chunked_speed !== undefined) this.mobileSpeed = this.formatSpeed(data.chunked_speed);
+                                            if (data.chunked_eta !== undefined) this.mobileEta = this.formatEta(data.chunked_eta);
+                                        } else {
+                                            this.mobileStatus = 'Finalizing...';
+                                        }
+                                        syncTimer = setTimeout(tick, 1000);
+                                    })
+                                    .catch(() => { syncTimer = setTimeout(tick, 2000); });
+                            };
+                            tick();
+                        }
 
-                            const now = Date.now();
-                            if (!this.mobileLastTime) {
-                                this.mobileLastTime = now;
-                                this.mobileLastLoaded = e.loaded;
+                        xhr.onload = () => {
+                            if (syncTimer) clearTimeout(syncTimer);
+                            this.mobileUploading = false;
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Upload Complete!',
+                                    text: storageChoice === 'pixeldrain'
+                                        ? 'Your video is uploaded. Processing continues in the background.'
+                                        : 'Your video has been uploaded successfully.',
+                                    confirmButtonText: 'OK',
+                                    confirmButtonColor: '#e50914',
+                                    background: '#1a1a1a',
+                                    color: '#fff',
+                                }).then(() => {
+                                    window.location.href = '{{ route("admin.dashboard") }}';
+                                });
                             } else {
-                                const timeDiff = (now - this.mobileLastTime) / 1000;
-                                if (timeDiff > 0.5) {
-                                    const bytesDiff = e.loaded - this.mobileLastLoaded;
-                                    if (bytesDiff > 0) {
-                                        const currentSpeed = bytesDiff / timeDiff;
-                                        this.mobileSpeed = this.formatSpeed(currentSpeed);
-                                        this.mobileEta = this.formatEta((e.total - e.loaded) / currentSpeed);
-                                    }
-                                    this.mobileLastLoaded = e.loaded;
-                                    this.mobileLastTime = now;
-                                }
+                                Swal.fire({ icon: 'error', title: 'Upload Failed', text: 'Server returned an error: ' + xhr.status, confirmButtonColor: '#e50914', background: '#1a1a1a', color: '#fff' });
                             }
+                        };
+                        xhr.onerror = () => {
+                            if (syncTimer) clearTimeout(syncTimer);
+                            this.mobileUploading = false;
+                            Swal.fire({ icon: 'error', title: 'Upload Failed', text: 'A network error occurred. Please try again.', confirmButtonColor: '#e50914', background: '#1a1a1a', color: '#fff' });
+                        };
+                        xhr.send(finalFormData);
+                    };
 
-                            // Browser -> server leg is done; the server is now
-                            // pushing to Pixeldrain. Poll the same progress
-                            // endpoint the popup uses to keep the bar moving.
-                            if (storageChoice === 'pixeldrain' && e.loaded >= e.total && !syncTimer) {
-                                const url = PROGRESS_URL.replace('__TOKEN__', uploadToken);
-                                const tick = () => {
-                                    fetch(url, { headers: { 'Accept': 'application/json' } })
-                                        .then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status))
-                                        .then(data => {
-                                            if (data.active) {
-                                                this.mobileProgress = data.percent || this.mobileProgress;
-                                                this.mobileStatus = data.phase || 'Syncing to Pixeldrain...';
+                    if (isFileMode) {
+                        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+                        const totalChunks = Math.ceil(videoFile.size / chunkSize);
+                        let currentChunk = 0;
 
-                                                if (data.chunked_speed !== undefined) {
-                                                    this.mobileSpeed = this.formatSpeed(data.chunked_speed);
-                                                }
-                                                if (data.chunked_eta !== undefined) {
-                                                    this.mobileEta = this.formatEta(data.chunked_eta);
-                                                }
-                                            } else {
-                                                this.mobileStatus = 'Finalizing...';
+                        const uploadNextChunk = () => {
+                            if (currentChunk >= totalChunks) return;
+
+                            const start = currentChunk * chunkSize;
+                            const end = Math.min(start + chunkSize, videoFile.size);
+                            const chunk = videoFile.slice(start, end);
+
+                            const chunkData = new FormData();
+                            chunkData.append('chunk', chunk);
+                            chunkData.append('chunk_index', currentChunk);
+                            chunkData.append('total_chunks', totalChunks);
+                            chunkData.append('upload_token', uploadToken);
+                            chunkData.append('original_filename', videoFile.name);
+
+                            const xhr = new XMLHttpRequest();
+                            xhr.open('POST', '/upload/chunk', true);
+                            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                            xhr.setRequestHeader('Accept', 'application/json');
+                            const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+                            xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+
+                            xhr.upload.onprogress = (e) => {
+                                if (e.lengthComputable) {
+                                    const loadedTotal = start + e.loaded;
+                                    this.mobileProgress = Math.round((loadedTotal / videoFile.size) * 100);
+                                    this.mobileStatus = 'Uploading chunk ' + (currentChunk + 1) + ' of ' + totalChunks + '...';
+
+                                    const now = Date.now();
+                                    if (!this.mobileLastTime) {
+                                        this.mobileLastTime = now;
+                                        this.mobileLastLoaded = loadedTotal;
+                                    } else {
+                                        const timeDiff = (now - this.mobileLastTime) / 1000;
+                                        if (timeDiff > 0.5) {
+                                            const bytesDiff = loadedTotal - this.mobileLastLoaded;
+                                            if (bytesDiff > 0) {
+                                                const currentSpeed = bytesDiff / timeDiff;
+                                                this.mobileSpeed = this.formatSpeed(currentSpeed);
+                                                this.mobileEta = this.formatEta((videoFile.size - loadedTotal) / currentSpeed);
                                             }
-                                            syncTimer = setTimeout(tick, 1000);
-                                        })
-                                        .catch(() => { syncTimer = setTimeout(tick, 2000); });
-                                };
-                                tick();
-                            }
-                        }
-                    };
+                                            this.mobileLastLoaded = loadedTotal;
+                                            this.mobileLastTime = now;
+                                        }
+                                    }
+                                }
+                            };
 
-                    xhr.onload = () => {
-                        if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
-                        this.mobileUploading = false;
+                            xhr.onload = () => {
+                                if (xhr.status >= 200 && xhr.status < 300) {
+                                    let res = {};
+                                    try { res = JSON.parse(xhr.responseText); } catch (e) {}
 
-                        let data = {};
-                        try { data = JSON.parse(xhr.responseText); } catch (e) { data = {}; }
+                                    if (res.status === 'completed') {
+                                        formData.delete('video_file');
+                                        formData.append('stitched_file_path', res.stitched_file_path);
+                                        submitFinalForm(formData);
+                                    } else {
+                                        currentChunk++;
+                                        uploadNextChunk();
+                                    }
+                                } else {
+                                    // Retry on fail after 3 seconds
+                                    setTimeout(() => uploadNextChunk(), 3000);
+                                }
+                            };
+                            xhr.onerror = () => setTimeout(() => uploadNextChunk(), 3000);
+                            xhr.send(chunkData);
+                        };
 
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Upload Complete!',
-                                text: storageChoice === 'pixeldrain'
-                                    ? 'Your video is uploaded. Processing continues in the background.'
-                                    : 'Your video has been uploaded successfully.',
-                                confirmButtonText: 'OK',
-                                confirmButtonColor: '#e50914',
-                                background: '#1a1a1a',
-                                color: '#fff',
-                            });
-                        } else {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Upload Failed',
-                                text: 'Server returned an error: ' + xhr.status,
-                                confirmButtonText: 'OK',
-                                confirmButtonColor: '#e50914',
-                                background: '#1a1a1a',
-                                color: '#fff',
-                            });
-                        }
-
-                        form.reset();
-                        this.step = 1;
-                        this.videoFile = null;
-                        this.videoPreview = null;
-                        this.thumbnailFile = null;
-                        this.thumbnailPreview = null;
-                    };
-
-                    xhr.onerror = () => {
-                        if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
-                        this.mobileUploading = false;
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Upload Failed',
-                            text: 'A network error occurred. Please try again.',
-                            confirmButtonText: 'OK',
-                            confirmButtonColor: '#e50914',
-                            background: '#1a1a1a',
-                            color: '#fff',
-                        });
-                    };
-
-                    xhr.send(formData);
+                        uploadNextChunk();
+                    } else {
+                        submitFinalForm(formData);
+                    }
                 }
             }
         }

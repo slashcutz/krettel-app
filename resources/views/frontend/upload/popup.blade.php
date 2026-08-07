@@ -372,12 +372,14 @@
                     this.syncing = false;
 
                     const formData = new FormData();
+                    let videoFile = null;
                     entries.forEach(entry => {
                         formData.append(entry[0], entry[1]);
+                        if (entry[0] === 'video_file') {
+                            videoFile = entry[1];
+                        }
                     });
 
-                    // Token lets the popup poll sync progress for a video whose
-                    // id does not exist yet (it is created inside store()).
                     if (storageChoice === 'pixeldrain') {
                         const arr = new Uint32Array(2);
                         (window.crypto || window.msCrypto).getRandomValues(arr);
@@ -385,90 +387,128 @@
                         formData.append('upload_token', this.uploadToken);
                     }
 
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', action, true);
-                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-                    xhr.setRequestHeader('Accept', 'application/json');
-
                     this.lastTime = Date.now();
                     this.lastLoaded = 0;
                     this.syncLastTime = 0;
                     this.syncLastLoaded = 0;
 
-                    xhr.upload.onprogress = (e) => {
-                        if (e.lengthComputable) {
-                            const now = Date.now();
-                            this.progress = Math.round((e.loaded / e.total) * 100);
-                            this.loadedSize = this.formatSize(e.loaded);
-                            this.totalSize = this.formatSize(e.total);
+                    const isFileMode = (videoFile && videoFile instanceof File && videoFile.size > 0);
 
-                            const timeDiff = (now - this.lastTime) / 1000;
-                            if (timeDiff > 0.5) {
-                                const bytesDiff = e.loaded - this.lastLoaded;
-                                const currentSpeed = bytesDiff / timeDiff;
-                                this.speed = currentSpeed > 0 ? this.formatSpeed(currentSpeed) : '--';
+                    const submitFinalForm = (finalFormData) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', action, true);
+                        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                        xhr.setRequestHeader('Accept', 'application/json');
 
-                                const remaining = e.total - e.loaded;
-                                const eta = currentSpeed > 0 ? remaining / currentSpeed : 0;
-                                this.eta = this.formatETA(eta);
-
-                                this.lastLoaded = e.loaded;
-                                this.lastTime = now;
-                            }
-
-                            // Browser->server leg done; store() is now pushing to
-                            // Pixeldrain. Switch the bar to the sync progress.
-                            if (storageChoice === 'pixeldrain' && e.loaded >= e.total) {
-                                this.pollPixeldrainSync();
-                            }
-                        }
-                    };
-
-                    xhr.onload = () => {
-                        this.stopPixeldrainSync();
-
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            let data = {};
-                            try {
-                                data = JSON.parse(xhr.responseText);
-                            } catch (e) {
-                                data = {};
-                            }
-
-                            console.log('[upload] upload response:', data);
-
-                            if (data && data.video_id) {
-                                this.videoId = data.video_id;
-                                this.slug = data.slug || null;
-                                this.processingTitle = data.title || fileName;
-                                this.status = 'processing';
-                                this.phase = 'uploading';
-                                this.pollStatus();
+                        xhr.onload = () => {
+                            this.stopPixeldrainSync();
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                let data = {};
+                                try { data = JSON.parse(xhr.responseText); } catch (e) {}
+                                if (data && data.video_id) {
+                                    this.videoId = data.video_id;
+                                    this.slug = data.slug || null;
+                                    this.processingTitle = data.title || fileName;
+                                    this.status = 'processing';
+                                    this.phase = 'uploading';
+                                    this.pollStatus();
+                                } else {
+                                    this.status = 'success';
+                                    this.successMessage = storageChoice === 'terabox'
+                                        ? 'Upload to server complete. TeraBox sync has been queued.'
+                                        : storageChoice === 'pixeldrain' ? 'Video uploaded successfully to Pixeldrain.' : 'Video uploaded successfully to local storage.';
+                                    setTimeout(() => window.close(), 5000);
+                                }
                             } else {
-                                this.status = 'success';
-                                this.successMessage = storageChoice === 'terabox'
-                                    ? 'Upload to server complete. TeraBox sync has been queued.'
-                                    : storageChoice === 'pixeldrain'
-                                        ? 'Video uploaded successfully to Pixeldrain.'
-                                        : 'Video uploaded successfully to local storage.';
-
-                                setTimeout(() => {
-                                    window.close();
-                                }, 5000);
+                                this.status = 'error';
+                                this.errorMessage = 'Server returned an error: ' + xhr.status;
                             }
-                        } else {
+                        };
+                        xhr.onerror = () => {
+                            this.stopPixeldrainSync();
                             this.status = 'error';
-                            this.errorMessage = 'Server returned an error: ' + xhr.status;
+                            this.errorMessage = 'A network error occurred during final save.';
+                        };
+
+                        if (storageChoice === 'pixeldrain' && isFileMode) {
+                            this.pollPixeldrainSync();
                         }
+                        xhr.send(finalFormData);
                     };
 
-                    xhr.onerror = () => {
-                        this.stopPixeldrainSync();
-                        this.status = 'error';
-                        this.errorMessage = 'A network error occurred during upload.';
-                    };
+                    if (isFileMode) {
+                        const chunkSize = 5 * 1024 * 1024; // 5MB
+                        const totalChunks = Math.ceil(videoFile.size / chunkSize);
+                        let currentChunk = 0;
 
-                    xhr.send(formData);
+                        const uploadNextChunk = () => {
+                            if (currentChunk >= totalChunks) return;
+                            const start = currentChunk * chunkSize;
+                            const end = Math.min(start + chunkSize, videoFile.size);
+                            const chunk = videoFile.slice(start, end);
+
+                            const chunkData = new FormData();
+                            chunkData.append('chunk', chunk);
+                            chunkData.append('chunk_index', currentChunk);
+                            chunkData.append('total_chunks', totalChunks);
+                            chunkData.append('upload_token', this.uploadToken || 'none');
+                            chunkData.append('original_filename', videoFile.name);
+
+                            const xhr = new XMLHttpRequest();
+                            xhr.open('POST', '/upload/chunk', true);
+                            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                            xhr.setRequestHeader('Accept', 'application/json');
+                            const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+                            xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+
+                            xhr.upload.onprogress = (e) => {
+                                if (e.lengthComputable) {
+                                    const now = Date.now();
+                                    const loadedTotal = start + e.loaded;
+                                    this.progress = Math.round((loadedTotal / videoFile.size) * 100);
+                                    this.loadedSize = this.formatSize(loadedTotal);
+                                    this.totalSize = this.formatSize(videoFile.size);
+
+                                    const timeDiff = (now - this.lastTime) / 1000;
+                                    if (timeDiff > 0.5) {
+                                        const bytesDiff = loadedTotal - this.lastLoaded;
+                                        const currentSpeed = bytesDiff / timeDiff;
+                                        this.speed = currentSpeed > 0 ? this.formatSpeed(currentSpeed) : '--';
+                                        const remaining = videoFile.size - loadedTotal;
+                                        const eta = currentSpeed > 0 ? remaining / currentSpeed : 0;
+                                        this.eta = this.formatETA(eta);
+
+                                        this.lastLoaded = loadedTotal;
+                                        this.lastTime = now;
+                                    }
+                                }
+                            };
+
+                            xhr.onload = () => {
+                                if (xhr.status >= 200 && xhr.status < 300) {
+                                    let res = {};
+                                    try { res = JSON.parse(xhr.responseText); } catch (e) {}
+
+                                    if (res.status === 'completed') {
+                                        formData.delete('video_file');
+                                        formData.append('stitched_file_path', res.stitched_file_path);
+                                        submitFinalForm(formData);
+                                    } else {
+                                        currentChunk++;
+                                        uploadNextChunk();
+                                    }
+                                } else {
+                                    setTimeout(() => uploadNextChunk(), 3000);
+                                }
+                            };
+                            xhr.onerror = () => setTimeout(() => uploadNextChunk(), 3000);
+                            xhr.send(chunkData);
+                        };
+
+                        uploadNextChunk();
+                    } else {
+                        submitFinalForm(formData);
+                    }
                 }
             }));
         });

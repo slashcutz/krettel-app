@@ -9,6 +9,8 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\VideoUploadController;
 use Illuminate\Support\Facades\Route;
 
+Route::post('/upload/chunk', [VideoUploadController::class, 'chunk'])->name('upload.chunk');
+
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/watch/{slug}', [VideoController::class, 'show'])->name('video.show');
 Route::get('/stream/{video}', [VideoController::class, 'stream'])->name('video.stream');
