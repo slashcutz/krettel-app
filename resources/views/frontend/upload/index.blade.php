@@ -519,14 +519,24 @@
                     this.mobileLastLoaded = 0;
                     this.mobileLastTime = 0;
 
-                    let uploadToken = '';
-                    const arr = new Uint32Array(2);
-                    (window.crypto || window.msCrypto).getRandomValues(arr);
-                    uploadToken = arr[0].toString(36) + arr[1].toString(36) + Date.now().toString(36);
-                    formData.append('upload_token', uploadToken);
-
                     const videoFile = this.videoFile;
                     const isFileMode = (videoFile && videoFile instanceof File && videoFile.size > 0);
+
+                    let uploadToken = '';
+                    if (isFileMode) {
+                        const cleanName = videoFile.name.replace(/[^a-zA-Z0-9]/g, '') || 'file';
+                        uploadToken = cleanName + '_' + videoFile.size + '_' + videoFile.lastModified;
+                    } else {
+                        const arr = new Uint32Array(2);
+                        (window.crypto || window.msCrypto).getRandomValues(arr);
+                        uploadToken = arr[0].toString(36) + arr[1].toString(36) + Date.now().toString(36);
+                    }
+                    
+                    if (formData.has('upload_token')) {
+                        formData.set('upload_token', uploadToken);
+                    } else {
+                        formData.append('upload_token', uploadToken);
+                    }
 
                     const submitFinalForm = (finalFormData) => {
                         this.mobileStatus = 'Saving to database...';
@@ -587,9 +597,11 @@
                     };
 
                     if (isFileMode) {
-                        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+                        const chunkSize = 20 * 1024 * 1024; // 20MB chunks
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
+                        let retryCount = 0;
+                        const maxRetries = 3;
 
                         const uploadNextChunk = () => {
                             if (currentChunk >= totalChunks) return;
@@ -616,7 +628,7 @@
                                 if (e.lengthComputable) {
                                     const loadedTotal = start + e.loaded;
                                     this.mobileProgress = Math.round((loadedTotal / videoFile.size) * 100);
-                                    this.mobileStatus = 'Uploading chunk ' + (currentChunk + 1) + ' of ' + totalChunks + '...';
+                                    this.mobileStatus = 'Uploading chunk ' + (currentChunk + 1) + ' of ' + totalChunks + ' (' + this.formatSize(loadedTotal) + ' / ' + this.formatSize(videoFile.size) + ')';
 
                                     const now = Date.now();
                                     if (!this.mobileLastTime) {
@@ -631,15 +643,26 @@
                                                 this.mobileSpeed = this.formatSpeed(currentSpeed);
                                                 this.mobileEta = this.formatEta((videoFile.size - loadedTotal) / currentSpeed);
                                             }
-                                            this.mobileLastLoaded = loadedTotal;
                                             this.mobileLastTime = now;
+                                            this.mobileLastLoaded = loadedTotal;
                                         }
                                     }
                                 }
                             };
 
+                            const handleChunkError = () => {
+                                retryCount++;
+                                if (retryCount > maxRetries) {
+                                    this.mobileUploading = false;
+                                    Swal.fire({ icon: 'error', title: 'Upload Failed', text: 'Connection dropped. Please refresh the page, select the exact same file, and it will instantly resume!', confirmButtonColor: '#e50914', background: '#1a1a1a', color: '#fff' });
+                                } else {
+                                    setTimeout(() => uploadNextChunk(), 3000);
+                                }
+                            };
+
                             xhr.onload = () => {
                                 if (xhr.status >= 200 && xhr.status < 300) {
+                                    retryCount = 0;
                                     let res = {};
                                     try { res = JSON.parse(xhr.responseText); } catch (e) {}
 
@@ -652,15 +675,27 @@
                                         uploadNextChunk();
                                     }
                                 } else {
-                                    // Retry on fail after 3 seconds
-                                    setTimeout(() => uploadNextChunk(), 3000);
+                                    handleChunkError();
                                 }
                             };
-                            xhr.onerror = () => setTimeout(() => uploadNextChunk(), 3000);
+                            xhr.onerror = () => handleChunkError();
                             xhr.send(chunkData);
                         };
 
-                        uploadNextChunk();
+                        fetch('/upload/resume-check?upload_token=' + uploadToken + '&total_chunks=' + totalChunks)
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data && data.uploaded_chunks) {
+                                    currentChunk = data.uploaded_chunks;
+                                    const loadedTotal = currentChunk * chunkSize;
+                                    this.mobileProgress = Math.round((loadedTotal / videoFile.size) * 100);
+                                    this.mobileStatus = 'Uploading chunk ' + (currentChunk + 1) + ' of ' + totalChunks + ' (' + this.formatSize(loadedTotal) + ' / ' + this.formatSize(videoFile.size) + ')';
+                                }
+                                uploadNextChunk();
+                            })
+                            .catch(err => {
+                                uploadNextChunk();
+                            });
                     } else {
                         submitFinalForm(formData);
                     }

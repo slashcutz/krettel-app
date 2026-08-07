@@ -864,6 +864,35 @@ class VideoUploadController extends Controller
         return ['time' => $time, 'level' => $level, 'message' => $message];
     }
 
+    public function resumeCheck(Request $request)
+    {
+        $uploadToken = $request->input('upload_token');
+        $totalChunks = (int) $request->input('total_chunks', 0);
+        
+        if (!$uploadToken || $totalChunks <= 0) {
+            return response()->json(['error' => 'Missing token or chunks'], 400);
+        }
+
+        $chunkDir = storage_path('app/private/chunks/' . $uploadToken);
+        
+        if (!file_exists($chunkDir)) {
+            return response()->json(['uploaded_chunks' => 0]);
+        }
+
+        $uploadedChunks = 0;
+        for ($i = 0; $i < $totalChunks; $i++) {
+            if (file_exists($chunkDir . '/' . $i)) {
+                $uploadedChunks++;
+            } else {
+                break; // Stop at first missing chunk to ensure continuous stream
+            }
+        }
+
+        return response()->json([
+            'uploaded_chunks' => $uploadedChunks,
+        ]);
+    }
+
     public function chunk(Request $request)
     {
         $uploadToken = $request->input('upload_token');
@@ -876,7 +905,7 @@ class VideoUploadController extends Controller
             return response()->json(['error' => 'Missing chunk data'], 400);
         }
 
-        $chunkDir = storage_path('app/chunks/' . $uploadToken);
+        $chunkDir = storage_path('app/private/chunks/' . $uploadToken);
         if (!file_exists($chunkDir)) {
             mkdir($chunkDir, 0777, true);
         }
@@ -888,12 +917,12 @@ class VideoUploadController extends Controller
         $chunks = array_diff(scandir($chunkDir), array('..', '.'));
         if (count($chunks) == $totalChunks) {
             // Stitch
-            if (!file_exists(storage_path('app/pending-uploads'))) {
-                mkdir(storage_path('app/pending-uploads'), 0777, true);
+            if (!file_exists(storage_path('app/private/pending-uploads'))) {
+                mkdir(storage_path('app/private/pending-uploads'), 0777, true);
             }
             $cleanName = preg_replace('/[^a-zA-Z0-9.\-_]/', '', $filename);
             $stitchedRelative = 'pending-uploads/' . $uploadToken . '_' . $cleanName;
-            $finalPath = storage_path('app/' . $stitchedRelative);
+            $finalPath = storage_path('app/private/' . $stitchedRelative);
             
             $out = fopen($finalPath, 'wb');
             for ($i = 0; $i < $totalChunks; $i++) {

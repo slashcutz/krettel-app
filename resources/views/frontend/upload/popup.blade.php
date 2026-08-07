@@ -380,7 +380,13 @@
                         }
                     });
 
-                    if (storageChoice === 'pixeldrain') {
+                    const isFileMode = (videoFile && videoFile instanceof File && videoFile.size > 0);
+
+                    if (isFileMode) {
+                        const cleanName = videoFile.name.replace(/[^a-zA-Z0-9]/g, '') || 'file';
+                        this.uploadToken = cleanName + '_' + videoFile.size + '_' + videoFile.lastModified;
+                        formData.append('upload_token', this.uploadToken);
+                    } else if (storageChoice === 'pixeldrain') {
                         const arr = new Uint32Array(2);
                         (window.crypto || window.msCrypto).getRandomValues(arr);
                         this.uploadToken = arr[0].toString(36) + arr[1].toString(36) + Date.now().toString(36);
@@ -391,8 +397,6 @@
                     this.lastLoaded = 0;
                     this.syncLastTime = 0;
                     this.syncLastLoaded = 0;
-
-                    const isFileMode = (videoFile && videoFile instanceof File && videoFile.size > 0);
 
                     const submitFinalForm = (finalFormData) => {
                         const xhr = new XMLHttpRequest();
@@ -437,9 +441,11 @@
                     };
 
                     if (isFileMode) {
-                        const chunkSize = 5 * 1024 * 1024; // 5MB
+                        const chunkSize = 20 * 1024 * 1024; // 20MB
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
+                        let retryCount = 0;
+                        const maxRetries = 3;
 
                         const uploadNextChunk = () => {
                             if (currentChunk >= totalChunks) return;
@@ -486,6 +492,7 @@
 
                             xhr.onload = () => {
                                 if (xhr.status >= 200 && xhr.status < 300) {
+                                    retryCount = 0; // reset retries on success
                                     let res = {};
                                     try { res = JSON.parse(xhr.responseText); } catch (e) {}
 
@@ -498,14 +505,42 @@
                                         uploadNextChunk();
                                     }
                                 } else {
+                                    handleChunkError();
+                                }
+                            };
+                            
+                            xhr.onerror = () => handleChunkError();
+                            
+                            const handleChunkError = () => {
+                                retryCount++;
+                                if (retryCount > maxRetries) {
+                                    this.status = 'error';
+                                    this.errorMessage = 'Upload failed after multiple retries. Your connection might have dropped. Please refresh the page and select the file again to resume.';
+                                } else {
                                     setTimeout(() => uploadNextChunk(), 3000);
                                 }
                             };
-                            xhr.onerror = () => setTimeout(() => uploadNextChunk(), 3000);
+                            
                             xhr.send(chunkData);
                         };
 
-                        uploadNextChunk();
+                        // Perform Resume Check
+                        fetch('/upload/resume-check?upload_token=' + this.uploadToken + '&total_chunks=' + totalChunks)
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data && data.uploaded_chunks) {
+                                    currentChunk = data.uploaded_chunks;
+                                    const loadedTotal = currentChunk * chunkSize;
+                                    this.progress = Math.round((loadedTotal / videoFile.size) * 100);
+                                    this.loadedSize = this.formatSize(loadedTotal);
+                                    this.totalSize = this.formatSize(videoFile.size);
+                                }
+                                uploadNextChunk();
+                            })
+                            .catch(err => {
+                                console.warn('Resume check failed, starting from 0', err);
+                                uploadNextChunk();
+                            });
                     } else {
                         submitFinalForm(formData);
                     }
