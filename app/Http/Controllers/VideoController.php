@@ -484,7 +484,7 @@ class VideoController extends Controller
                 }
 
                 while (!$body->eof()) {
-                    $chunk = $body->read(65536);
+                    $chunk = $body->read(1048576); // 1MB chunks instead of 64KB
                     if ($chunk !== '') {
                         echo $chunk;
                         flush();
@@ -659,7 +659,7 @@ class VideoController extends Controller
             fclose($pipes[0]);
 
             while (! feof($pipes[1])) {
-                $chunk = fread($pipes[1], 65536);
+                $chunk = fread($pipes[1], 1048576); // 1MB chunks instead of 64KB
                 if ($chunk !== false && $chunk !== '') {
                     echo $chunk;
                     flush();
