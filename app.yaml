@@ -10,8 +10,8 @@ env:
   APP_LOCALE: en
   APP_FALLBACK_LOCALE: en
   FILESYSTEM_DISK: local
-  SESSION_DRIVER: database
-  CACHE_STORE: database
+  SESSION_DRIVER: file
+  CACHE_STORE: file
   QUEUE_CONNECTION: database
   DB_CONNECTION: sqlite
   DB_DATABASE: /app/storage/database.sqlite
