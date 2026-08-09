@@ -32,7 +32,7 @@ name = "run"
 module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
-main-args = ["-t", "/app/public", "-S", "0.0.0.0:8080", "/app/deploy/wasmer/router.php"]
+main-args = ["-t", "/app/public", "-S", "0.0.0.0:8080"]
 env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=database", "CACHE_STORE=database", "QUEUE_CONNECTION=database"]
 
 [[command]]
