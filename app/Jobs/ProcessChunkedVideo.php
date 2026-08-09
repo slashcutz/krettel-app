@@ -38,7 +38,19 @@ class ProcessChunkedVideo implements ShouldQueue
         try {
             $chunkDir = storage_path('app/private/chunks/' . $this->uploadToken);
 
+            $stitchStart = microtime(true);
             $stitchedAbs = ChunkAssembler::stitch($chunkDir, $this->uploadToken, $this->originalFilename);
+            $stitchElapsed = microtime(true) - $stitchStart;
+            $stitchSize = (int) @filesize($stitchedAbs);
+
+            Log::channel('krettel')->info('[CHUNKED] Stitched chunks to single file.', [
+                'video_id' => $this->video->id,
+                'upload_token' => $this->uploadToken,
+                'size_mb' => round($stitchSize / 1048576, 2),
+                'elapsed_s' => round($stitchElapsed, 1),
+                'speed_MBps' => $stitchElapsed > 0 ? round(($stitchSize / 1048576) / $stitchElapsed, 1) : 0,
+            ]);
+
             $cleanName = preg_replace('/[^a-zA-Z0-9.\-_]/', '', $this->originalFilename) ?: 'video.mp4';
             $stitchedRelative = 'pending-uploads/' . $this->uploadToken . '_' . $cleanName;
 

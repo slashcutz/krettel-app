@@ -60,6 +60,7 @@ class VideoUploadController extends Controller
         $storageProvider = $request->input('storage_provider', 'local');
         $slug = Str::slug($request->input('title')) . '-' . uniqid();
         Log::channel('krettel')->info('[UPLOAD] Validation passed. Storage provider: ' . $storageProvider, ['slug' => $slug]);
+        $storeStart = microtime(true);
 
         // Check if user is linking an existing TeraBox file instead of uploading a new one
         $teraboxFilePath = trim((string) $request->input('terabox_file_path'));
@@ -357,7 +358,10 @@ class VideoUploadController extends Controller
             }
         }
 
-        Log::channel('krettel')->info('[UPLOAD] Upload flow completed successfully.', ['video_id' => $video->id]);
+        Log::channel('krettel')->info('[UPLOAD] Upload flow completed successfully.', [
+            'video_id' => $video->id,
+            'total_elapsed_ms' => round((microtime(true) - $storeStart) * 1000),
+        ]);
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
@@ -955,7 +959,19 @@ class VideoUploadController extends Controller
         }
 
         $chunkPath = $chunkDir . '/' . $chunkIndex;
+        $bytes = (int) filesize($file->getPathname());
+        $start = microtime(true);
         move_uploaded_file($file->getPathname(), $chunkPath);
+        $elapsed = microtime(true) - $start;
+        $speed = $elapsed > 0 ? round($bytes / 1048576 / $elapsed, 1) : 0;
+
+        Log::channel('krettel')->info('[CHUNK] Chunk received.', [
+            'upload_token' => $uploadToken,
+            'chunk_index' => (int) $chunkIndex,
+            'chunk_mb' => round($bytes / 1048576, 2),
+            'elapsed_ms' => round($elapsed * 1000),
+            'speed_MBps' => $speed,
+        ]);
 
         // Do NOT stitch here. Stitching a multi-GB upload inline blows the
         // gateway request timeout and leaves the browser hanging at 100%.

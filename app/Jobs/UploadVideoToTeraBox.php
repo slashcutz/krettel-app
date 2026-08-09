@@ -71,7 +71,18 @@ class UploadVideoToTeraBox implements ShouldQueue
                 'size_bytes' => filesize($absolutePath),
             ]);
 
+            $uploadStart = microtime(true);
             $remotePath = $terabox->uploadFile($absolutePath, $remoteDir, $filename);
+            $uploadElapsed = microtime(true) - $uploadStart;
+            $uploadSize = (int) @filesize($absolutePath);
+
+            Log::channel('krettel')->info('[TERABOX-SYNC] Upload finished.', [
+                'video_id' => $this->video->id,
+                'remote_path' => $remotePath,
+                'size_mb' => round($uploadSize / 1048576, 2),
+                'elapsed_s' => round($uploadElapsed, 1),
+                'speed_MBps' => $uploadElapsed > 0 ? round(($uploadSize / 1048576) / $uploadElapsed, 1) : 0,
+            ]);
 
             // Never persist the dlink — it expires after ~8h.
             // Save the permanent remote path and mark the video as terabox-hosted.

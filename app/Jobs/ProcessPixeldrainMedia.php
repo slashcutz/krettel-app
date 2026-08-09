@@ -239,6 +239,19 @@ class ProcessPixeldrainMedia implements ShouldQueue
             });
         }
 
-        return $pixeldrain->upload($absolutePath, basename($this->stagingPath));
+        $pushStart = microtime(true);
+        $fileId = $pixeldrain->upload($absolutePath, basename($this->stagingPath));
+        $pushElapsed = microtime(true) - $pushStart;
+        $pushSize = (int) @filesize($absolutePath);
+
+        Log::channel('krettel')->info('[PIXELDRAIN-SYNC] Original video push finished.', [
+            'video_id' => $this->video->id,
+            'file_id' => $fileId,
+            'size_mb' => round($pushSize / 1048576, 2),
+            'elapsed_s' => round($pushElapsed, 1),
+            'speed_MBps' => $pushElapsed > 0 ? round(($pushSize / 1048576) / $pushElapsed, 1) : 0,
+        ]);
+
+        return $fileId;
     }
 }
