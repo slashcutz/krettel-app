@@ -3,8 +3,9 @@ app_id: da_R4qIGtmUDA9Y
 owner: slashcutz_official
 package: .
 env:
+  APP_KEY: base64:A/zA43K6XN1JzKqCtrpfucXFxEw2guTB6MDSkyYhiMo=
   APP_ENV: production
-  APP_DEBUG: 'false'
+  APP_DEBUG: 'true'
   APP_URL: https://krettel-app.wasmer.app
   APP_LOCALE: en
   APP_FALLBACK_LOCALE: en
