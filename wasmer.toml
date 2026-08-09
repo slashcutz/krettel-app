@@ -64,5 +64,5 @@ name = "process-queue"
 module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
-main-args = ["/app/artisan", "queue:work", "--stop-when-empty", "--sleep=3", "--tries=2", "--timeout=800"]
+main-args = ["/app/artisan", "queue:work", "--stop-when-empty", "--sleep=3", "--tries=2", "--timeout=7200"]
 env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=file", "CACHE_STORE=file", "QUEUE_CONNECTION=database"]
