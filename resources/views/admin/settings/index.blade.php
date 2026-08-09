@@ -148,6 +148,52 @@
                     </div>
                 </div>
 
+                <!-- Cloudflare R2 Staging Bucket -->
+                <div class="lg:col-span-3 bg-card border border-border rounded-xl overflow-hidden">
+                    <div class="px-5 md:px-6 py-3.5 md:py-4 border-b border-border flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 0 0 4 4h9a5 5 0 0 0 0-10h-.5A7 7 0 0 0 9 7a7.5 7.5 0 0 0-.9 14.9"></path></svg>
+                            <h2 class="text-base md:text-lg font-bold text-white">Cloudflare R2 Staging Bucket</h2>
+                            <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">Fast Uploads</span>
+                        </div>
+                    </div>
+
+                    <div class="p-5 md:p-6">
+                        <p class="text-xs text-muted mb-4">Videos upload straight to Cloudflare's nearest edge (fast even far away), then a background job relays them to your server and pushes to Pixeldrain/TeraBox. Objects are deleted from R2 after the relay.</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                                <label for="r2_enabled" class="block text-sm font-medium text-muted mb-1.5">Enabled</label>
+                                <select id="r2_enabled" name="r2_enabled" class="w-full bg-secondary border border-border text-white rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="1" {{ ($settings['r2_enabled'] ?? config('r2.enabled')) ? 'selected' : '' }}>On</option>
+                                    <option value="0" {{ !($settings['r2_enabled'] ?? config('r2.enabled')) ? 'selected' : '' }}>Off</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="r2_bucket" class="block text-sm font-medium text-muted mb-1.5">Bucket</label>
+                                <input type="text" id="r2_bucket" name="r2_bucket" value="{{ old('r2_bucket', $settings['r2_bucket'] ?? config('r2.bucket')) }}" placeholder="krettel" class="w-full bg-secondary border border-border text-white rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary font-mono text-sm">
+                            </div>
+                            <div>
+                                <label for="r2_account_id" class="block text-sm font-medium text-muted mb-1.5">Account ID</label>
+                                <input type="text" id="r2_account_id" name="r2_account_id" value="{{ old('r2_account_id', $settings['r2_account_id'] ?? config('r2.account_id')) }}" placeholder="32-hex-account-id" class="w-full bg-secondary border border-border text-white rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary font-mono text-sm">
+                            </div>
+                            <div>
+                                <label for="r2_access_key_id" class="block text-sm font-medium text-muted mb-1.5">Access Key ID</label>
+                                <input type="text" id="r2_access_key_id" name="r2_access_key_id" value="{{ old('r2_access_key_id', $settings['r2_access_key_id'] ?? config('r2.access_key_id')) }}" placeholder="Same as Account ID for Cloudflare API tokens" class="w-full bg-secondary border border-border text-white rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary font-mono text-sm">
+                                <p class="text-xs text-muted mt-1.5">For a Cloudflare API token (cfat_...) the access key is the Account ID. For an R2 API token it has its own Access Key ID.</p>
+                            </div>
+                            <div>
+                                <label for="r2_secret_access_key" class="block text-sm font-medium text-muted mb-1.5">Secret Access Key</label>
+                                <input type="password" id="r2_secret_access_key" name="r2_secret_access_key" value="{{ old('r2_secret_access_key', $settings['r2_secret_access_key'] ?? config('r2.secret_access_key')) }}" placeholder="cfat_... or R2 API token secret" class="w-full bg-secondary border border-border text-white rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary font-mono text-sm">
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label for="r2_endpoint" class="block text-sm font-medium text-muted mb-1.5">Endpoint</label>
+                                <input type="url" id="r2_endpoint" name="r2_endpoint" value="{{ old('r2_endpoint', $settings['r2_endpoint'] ?? config('r2.endpoint')) }}" placeholder="https://ACCOUNT.r2.cloudflarestorage.com" class="w-full bg-secondary border border-border text-white rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary font-mono text-sm">
+                                <p class="text-xs text-muted mt-1.5">S3 API endpoint of the account: <code class="text-white">https://ACCOUNT_ID.r2.cloudflarestorage.com</code>. The bucket's CORS rules must allow PUT/GET/DELETE from your site.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </form>
     </div>

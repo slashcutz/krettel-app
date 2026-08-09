@@ -10,6 +10,8 @@ use App\Jobs\TranscodeVideoToHls;
 use App\Jobs\ProcessPixeldrainMedia;
 use App\Jobs\UploadVideoToTeraBox;
 use App\Jobs\ProcessChunkedVideo;
+use App\Jobs\ProcessR2Upload;
+use App\Services\R2Presigner;
 use App\Support\LanguageCodes;
 use App\Support\MediaProbe;
 use App\Support\PixeldrainImageStore;
@@ -69,6 +71,7 @@ class VideoUploadController extends Controller
         $stagingPath = null;
         $videoPath = null;
         $isChunkedUpload = false;
+        $isR2Upload = false;
         $originalName = (string) $request->input('original_filename', 'video.mp4');
         if (!$isLinked) {
             if ($request->filled('stitched_file_path')) {
@@ -130,6 +133,17 @@ class VideoUploadController extends Controller
                 if ($uploadToken !== '' && is_dir($chunkDir)) {
                     $isChunkedUpload = true;
                     Log::channel('krettel')->info('[UPLOAD] Chunked upload detected, deferred stitch.', [
+                        'upload_token' => $uploadToken,
+                        'original_filename' => $originalName,
+                    ]);
+                } elseif ($uploadToken !== '' && Cache::has('r2_upload_' . $uploadToken)) {
+                    // R2 direct upload: chunks live in Cloudflare R2, not on
+                    // the local volume yet. ProcessR2Upload relays them to the
+                    // volume in the worker, then hands off to the normal
+                    // stitch -> push pipeline.
+                    $isChunkedUpload = true;
+                    $isR2Upload = true;
+                    Log::channel('krettel')->info('[UPLOAD] R2 direct upload detected, deferred relay.', [
                         'upload_token' => $uploadToken,
                         'original_filename' => $originalName,
                     ]);
@@ -213,6 +227,7 @@ class VideoUploadController extends Controller
             'terabox_image' => $teraboxImage,
             'previews' => !empty($previews) ? $previews : null,
             'resolution' => $request->input('resolution', '1080p'),
+            'upload_token' => $request->filled('upload_token') ? (string) $request->input('upload_token') : null,
         ]);
 
         Log::channel('krettel')->info('[UPLOAD] Video row created in DB.', [
@@ -315,8 +330,14 @@ class VideoUploadController extends Controller
             Log::channel('krettel')->info('[UPLOAD] Chunked upload -> deferred stitch job dispatched.', [
                 'video_id' => $video->id,
                 'upload_token' => $uploadToken,
+                'r2_direct' => $isR2Upload,
             ]);
-            ProcessChunkedVideo::dispatch($video, $uploadToken, $originalName, $storageProvider, $savedAudioCount);
+
+            if ($isR2Upload) {
+                ProcessR2Upload::dispatch($video, $uploadToken, $originalName, $storageProvider, $savedAudioCount);
+            } else {
+                ProcessChunkedVideo::dispatch($video, $uploadToken, $originalName, $storageProvider, $savedAudioCount);
+            }
         } elseif ($isLinked) {
             Log::channel('krettel')->info('[UPLOAD] Video linked instantly from TeraBox. No sync job dispatched.', ['video_id' => $video->id]);
             // Warm the link cache
@@ -907,18 +928,33 @@ class VideoUploadController extends Controller
         // dropped after the final chunk was received but before the browser
         // got the completion response, or across a resume).
         $chunkDir = storage_path('app/private/chunks/' . $uploadToken);
-        
-        if (!file_exists($chunkDir)) {
-            return response()->json(['uploaded_chunks' => 0]);
+        $uploadedChunks = 0;
+
+        if (file_exists($chunkDir)) {
+            for ($i = 0; $i < $totalChunks; $i++) {
+                if (file_exists($chunkDir . '/' . $i)) {
+                    $uploadedChunks++;
+                } else {
+                    break; // Stop at first missing chunk to ensure continuous stream
+                }
+            }
         }
 
-        $uploadedChunks = 0;
-        for ($i = 0; $i < $totalChunks; $i++) {
-            if (file_exists($chunkDir . '/' . $i)) {
-                $uploadedChunks++;
-            } else {
-                break; // Stop at first missing chunk to ensure continuous stream
+        // R2 direct-upload session: chunks sit in Cloudflare R2 and completion
+        // is tracked in the r2_upload_{token} cache. Let the browser skip the
+        // chunks it already pushed to the bucket in a previous attempt.
+        $r2Session = Cache::get('r2_upload_' . $uploadToken);
+        if (is_array($r2Session)) {
+            $done = $r2Session['done'] ?? [];
+            $r2Count = 0;
+            for ($i = 0; $i < $totalChunks; $i++) {
+                if (!empty($done[$i])) {
+                    $r2Count++;
+                } else {
+                    break;
+                }
             }
+            $uploadedChunks = max($uploadedChunks, $r2Count);
         }
 
         if ($uploadedChunks >= $totalChunks) {
@@ -955,9 +991,136 @@ class VideoUploadController extends Controller
         // doesn't keep showing a stale pixeldrain push.
         if ($uploadToken !== '') {
             \Illuminate\Support\Facades\Cache::forget('pixeldrain_upload_' . $uploadToken);
+
+            // R2 direct upload: forget the session and best-effort delete any
+            // chunk objects already sitting in the bucket.
+            $r2Session = \Illuminate\Support\Facades\Cache::get('r2_upload_' . $uploadToken);
+            \Illuminate\Support\Facades\Cache::forget('r2_upload_' . $uploadToken);
+
+            if (is_array($r2Session) && !empty($r2Session['done'])) {
+                try {
+                    $presigner = new R2Presigner();
+                    if ($presigner->isConfigured()) {
+                        $client = new \GuzzleHttp\Client(['timeout' => 20]);
+                        foreach (array_keys($r2Session['done']) as $index) {
+                            try {
+                                $url = $presigner->presignDelete($presigner->chunkKey($uploadToken, (int) $index), 300);
+                                $client->request('DELETE', $url);
+                            } catch (\Throwable $e) {
+                                // Ignore per-object failures; bucket lifecycle cleans up.
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::channel('krettel')->warning('[UPLOAD] Failed to clean R2 objects on reset.', ['error' => $e->getMessage()]);
+                }
+            }
         }
 
         return response()->json(['reset' => true, 'upload_token' => $uploadToken]);
+    }
+
+    /**
+     * Mint a presigned Cloudflare R2 PUT URL for one chunk of an R2
+     * direct-upload session. The browser then PUTs the chunk straight to
+     * Cloudflare's edge (fast even from far away) instead of through this
+     * server. Progress/completion is tracked under the r2_upload_{token}
+     * cache so it survives browser refreshes.
+     */
+    public function presign(Request $request)
+    {
+        $uploadToken = (string) $request->input('upload_token', '');
+        $chunkIndex = $request->integer('chunk_index', -1);
+        $totalChunks = $request->integer('total_chunks', 0);
+
+        if ($uploadToken === '' || $chunkIndex < 0 || $totalChunks <= 0) {
+            return response()->json(['error' => 'Missing chunk data'], 400);
+        }
+
+        $presigner = new R2Presigner();
+        if (! $presigner->isEnabled()) {
+            return response()->json(['error' => 'R2 direct upload is not enabled'], 400);
+        }
+
+        $key = $presigner->chunkKey($uploadToken, $chunkIndex);
+        $url = $presigner->presignPut($key);
+
+        $cacheKey = 'r2_upload_' . $uploadToken;
+        $session = Cache::get($cacheKey);
+        if (! is_array($session)) {
+            $session = [
+                'total_chunks' => 0,
+                'done' => [],
+                'original_filename' => (string) $request->input('original_filename', 'video.mp4'),
+                'created_at' => now()->toIso8601String(),
+            ];
+        }
+        $session['total_chunks'] = max((int) $session['total_chunks'], $totalChunks);
+        if (isset($session['done']) && is_array($session['done']) && ! empty($session['done'][$chunkIndex])) {
+            // Already uploaded earlier (resume) — the browser can skip this one.
+            return response()->json([
+                'url' => null,
+                'key' => $key,
+                'chunk_index' => $chunkIndex,
+                'already_done' => true,
+            ]);
+        }
+        Cache::put($cacheKey, $session, now()->addDays(7));
+
+        Log::channel('krettel')->info('[R2] Presigned chunk URL issued.', [
+            'upload_token' => $uploadToken,
+            'chunk_index' => $chunkIndex,
+            'total_chunks' => $totalChunks,
+        ]);
+
+        return response()->json([
+            'url' => $url,
+            'key' => $key,
+            'chunk_index' => $chunkIndex,
+            'already_done' => false,
+        ]);
+    }
+
+    /**
+     * Marks one chunk of an R2 direct-upload session as uploaded. When every
+     * chunk is confirmed the browser submits the final form (store()), which
+     * dispatches the relay job.
+     */
+    public function chunkDone(Request $request)
+    {
+        $uploadToken = (string) $request->input('upload_token', '');
+        $chunkIndex = $request->integer('chunk_index', -1);
+
+        if ($uploadToken === '' || $chunkIndex < 0) {
+            return response()->json(['error' => 'Missing chunk data'], 400);
+        }
+
+        $cacheKey = 'r2_upload_' . $uploadToken;
+        $session = Cache::get($cacheKey);
+        if (! is_array($session)) {
+            return response()->json(['error' => 'No active upload session for this token'], 400);
+        }
+
+        $done = $session['done'] ?? [];
+        $done[$chunkIndex] = true;
+        $session['done'] = $done;
+        Cache::put($cacheKey, $session, now()->addDays(7));
+
+        $received = count($done);
+        $total = (int) $session['total_chunks'];
+
+        Log::channel('krettel')->info('[R2] Chunk marked as uploaded.', [
+            'upload_token' => $uploadToken,
+            'chunk_index' => $chunkIndex,
+            'received' => $received,
+            'total' => $total,
+        ]);
+
+        if ($received >= $total) {
+            return response()->json(['status' => 'completed', 'uploaded_chunks' => $received]);
+        }
+
+        return response()->json(['status' => 'chunk_received', 'uploaded_chunks' => $received]);
     }
 
     public function chunk(Request $request)

@@ -29,13 +29,21 @@ class AdminController extends Controller
         // In-flight + recently finished uploads — mirrors the upload popup's live states.
         $pendingVideos = Video::latest()
             ->where(function ($q) {
-                $q->whereIn('video_url', ['pending-upload', 'processing', 'failed', 'terabox-remote', 'hls-local'])
+                $q->whereIn('video_url', ['pending-upload', 'processing', 'failed', 'terabox-remote', 'hls-local', 'pixeldrain-remote'])
                   ->orWhere('hls_status', 'processing');
             })
             ->take(20)
             ->get()
             ->map(function ($video) {
-                $progress = \Illuminate\Support\Facades\Cache::get('terabox_upload_' . $video->id);
+                // R2 relay + Pixeldrain push progress lives in cache keyed by the
+                // upload token (the same key the upload popup polls).
+                $progress = [];
+                if ($video->upload_token) {
+                    $progress = \Illuminate\Support\Facades\Cache::get('pixeldrain_upload_' . $video->upload_token) ?: [];
+                }
+                $teraboxProgress = \Illuminate\Support\Facades\Cache::get('terabox_upload_' . $video->id);
+                $progress = $progress ?: ($teraboxProgress ?: []);
+
                 $state = $this->stateFor($video);
 
                 return [
@@ -44,12 +52,13 @@ class AdminController extends Controller
                     'uploaded_human' => $video->created_at->diffForHumans(),
                     'status' => $video->video_url,
                     'state' => $state,
-                    'done' => in_array($state, ['ready', 'terabox', 'failed'], true),
+                    'done' => in_array($state, ['ready', 'terabox', 'pixeldrain', 'failed'], true),
                     'phase' => $progress['phase'] ?? null,
                     'size_mb' => isset($progress['total']) ? round($progress['total'] / 1048576, 1) : null,
-                    'uploaded_mb' => isset($progress['bytes']) ? round($progress['bytes'] / 1048576, 1) : null,
+                    'uploaded_mb' => isset($progress['bytes']) ? round($progress['bytes'] / 1048576, 1) : (isset($progress['uploaded']) ? round($progress['uploaded'] / 1048576, 1) : null),
+                    'speed_mbps' => isset($progress['chunked_speed']) ? round($progress['chunked_speed'] / 1048576, 1) : null,
                     'progress' => isset($progress['total']) && $progress['total'] > 0
-                        ? min(100, (int) round($progress['bytes'] / $progress['total'] * 100))
+                        ? min(100, (int) round(($progress['bytes'] ?? $progress['uploaded']) / $progress['total'] * 100))
                         : null,
                 ];
             });
@@ -77,6 +86,12 @@ class AdminController extends Controller
         }
         if ($video->video_url === 'terabox-remote') {
             return 'terabox';
+        }
+        if ($video->video_url === 'pixeldrain-remote') {
+            return 'pixeldrain';
+        }
+        if ($video->storage_provider === 'pixeldrain' && $video->video_url === 'processing') {
+            return 'pixeldrain-uploading';
         }
         if ($video->video_url === 'processing') {
             return 'terabox-uploading';

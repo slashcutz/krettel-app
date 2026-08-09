@@ -46,6 +46,12 @@ class SettingController extends Controller
             'terabox_web_host' => 'nullable|url|max:255',
             'pixeldrain_api_key' => 'nullable|string|max:500',
             'pixeldrain_base_url' => 'nullable|url|max:255',
+            'r2_enabled' => 'nullable|in:on,off,1,0,true,false',
+            'r2_account_id' => 'nullable|string|max:100',
+            'r2_access_key_id' => 'nullable|string|max:200',
+            'r2_secret_access_key' => 'nullable|string|max:500',
+            'r2_bucket' => 'nullable|string|max:100',
+            'r2_endpoint' => 'nullable|url|max:255',
         ]);
 
         foreach (['platform_name', 'support_email', 'seo_description', 'primary_color'] as $key) {
@@ -76,6 +82,16 @@ class SettingController extends Controller
             if ($request->has($key)) {
                 Setting::set($key, $request->input($key));
             }
+        }
+
+        foreach (['r2_account_id', 'r2_access_key_id', 'r2_secret_access_key', 'r2_bucket', 'r2_endpoint'] as $key) {
+            if ($request->has($key)) {
+                Setting::set($key, $request->input($key));
+            }
+        }
+
+        if ($request->has('r2_enabled')) {
+            Setting::set('r2_enabled', $request->boolean('r2_enabled') ? 'true' : 'false');
         }
 
         return redirect()->route('admin.settings.index')

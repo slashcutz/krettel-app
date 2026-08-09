@@ -73,7 +73,8 @@
                         'pending-upload': 'Pending upload',
                         'processing': 'Processing',
                         'failed': 'Failed',
-                        'terabox-remote': 'Complete'
+                        'terabox-remote': 'Complete',
+                        'pixeldrain-remote': 'Stored on Pixeldrain'
                     }[s] || s;
                 },
                 async refresh() {
@@ -224,13 +225,14 @@
                                         <p class="text-sm text-white font-medium truncate" x-text="pv.title"></p>
                                         <p class="text-xs text-muted" x-text="'Uploaded ' + pv.uploaded_human"></p>
                                         <p class="text-xs font-medium" :class="pv.status === 'failed' ? 'text-warning' : 'text-primary'" x-text="statusLabel(pv.status)"></p>
+                                        <p x-show="pv.phase" class="text-[11px] text-muted truncate" x-text="pv.phase"></p>
                                         <template x-if="pv.progress !== null && pv.status !== 'failed'">
                                             <div class="mt-1.5 space-y-1">
                                                 <div class="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
                                                     <div class="bg-primary h-full rounded-full transition-all duration-500" :style="'width: ' + pv.progress + '%'"></div>
                                                 </div>
                                                 <p class="text-[11px] text-muted flex justify-between">
-                                                    <span x-text="pv.phase === 'pending' ? 'Waiting to start...' : 'Uploading to TeraBox...'"></span>
+                                                    <span x-text="pv.speed_mbps !== null ? pv.speed_mbps + ' MB/s' : (pv.phase || 'Working...')"></span>
                                                     <span x-text="pv.uploaded_mb !== null && pv.size_mb !== null ? pv.uploaded_mb + ' MB / ' + pv.size_mb + ' MB' : (pv.size_mb !== null ? pv.size_mb + ' MB' : '')"></span>
                                                 </p>
                                             </div>

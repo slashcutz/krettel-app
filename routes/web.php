@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/upload/chunk', [VideoUploadController::class, 'chunk'])->name('upload.chunk');
 Route::get('/upload/resume-check', [VideoUploadController::class, 'resumeCheck'])->name('upload.resume-check');
+Route::post('/upload/presign', [VideoUploadController::class, 'presign'])->name('upload.presign');
+Route::post('/upload/chunk-done', [VideoUploadController::class, 'chunkDone'])->name('upload.chunk-done');
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/watch/{slug}', [VideoController::class, 'show'])->name('video.show');

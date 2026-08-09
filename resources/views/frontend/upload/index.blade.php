@@ -622,7 +622,9 @@
                         let currentChunk = 0;
                         let retryCount = 0;
                         const maxRetries = 20; // Increased to 20 for even better resilience on screen wake
+                        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
+                        const startLegacyUpload = () => {
                         const uploadNextChunk = () => {
                             if (currentChunk >= totalChunks) return;
 
@@ -762,6 +764,171 @@
                             })
                             .catch(err => {
                                 uploadNextChunk();
+                            });
+                        };
+
+                        // Cloudflare R2 direct upload: browser PUTs each chunk
+                        // straight to Cloudflare's edge (MB/s even from far away),
+                        // calling back only to mint presigned URLs and confirm
+                        // each chunk. Falls back to the server chunk upload above.
+                        let r2Completed = false;
+                        const r2DoneSet = {};
+                        const r2InFlight = {};
+                        let r2BytesDone = 0;
+                        const R2_WORKERS = 4;
+
+                        const presignChunk = (index) => {
+                            const body = new URLSearchParams();
+                            body.append('upload_token', uploadToken);
+                            body.append('chunk_index', index);
+                            body.append('total_chunks', totalChunks);
+                            body.append('original_filename', videoFile.name);
+                            return fetch('/upload/presign', {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: body.toString()
+                            }).then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status));
+                        };
+
+                        const confirmChunk = (index) => {
+                            const body = new URLSearchParams();
+                            body.append('upload_token', uploadToken);
+                            body.append('chunk_index', index);
+                            return fetch('/upload/chunk-done', {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: body.toString()
+                            });
+                        };
+
+                        const updateR2Progress = () => {
+                            let loadedTotal = r2BytesDone;
+                            for (const k in r2InFlight) loadedTotal += r2InFlight[k] || 0;
+                            loadedTotal = Math.min(loadedTotal, videoFile.size);
+                            this.mobileProgress = Math.round((loadedTotal / videoFile.size) * 100);
+                            this.mobileStatus = 'Uploading to Cloudflare edge (' + this.formatSize(loadedTotal) + ' / ' + this.formatSize(videoFile.size) + ')';
+
+                            const now = Date.now();
+                            if (!this.mobileLastTime) {
+                                this.mobileLastTime = now;
+                                this.mobileLastLoaded = loadedTotal;
+                            } else {
+                                const timeDiff = (now - this.mobileLastTime) / 1000;
+                                if (timeDiff > 0.5) {
+                                    const bytesDiff = loadedTotal - this.mobileLastLoaded;
+                                    if (bytesDiff > 0) {
+                                        const currentSpeed = bytesDiff / timeDiff;
+                                        this.mobileSpeed = this.formatSpeed(currentSpeed);
+                                        this.mobileEta = this.formatEta((videoFile.size - loadedTotal) / currentSpeed);
+                                    }
+                                    this.mobileLastTime = now;
+                                    this.mobileLastLoaded = loadedTotal;
+                                }
+                            }
+                        };
+
+                        const submitWhenR2Done = () => {
+                            if (r2Completed) return;
+                            r2Completed = true;
+                            formData.delete('video_file');
+                            formData.append('original_filename', videoFile.name);
+                            submitFinalForm(formData);
+                        };
+
+                        const markR2ChunkDone = (index) => {
+                            r2DoneSet[index] = true;
+                            if (Object.keys(r2DoneSet).length >= totalChunks) {
+                                submitWhenR2Done();
+                            }
+                        };
+
+                        const uploadChunk = (index, done) => {
+                            if (index >= totalChunks) { done(); return; }
+                            const start = index * chunkSize;
+                            const end = Math.min(start + chunkSize, videoFile.size);
+                            const chunk = videoFile.slice(start, end);
+
+                            presignChunk(index)
+                                .then(res => {
+                                    if (res.already_done) {
+                                        r2BytesDone += (end - start);
+                                        updateR2Progress();
+                                        markR2ChunkDone(index);
+                                        done();
+                                        return;
+                                    }
+                                    if (!res.url) throw new Error('No presigned URL returned');
+
+                                    const xhr = new XMLHttpRequest();
+                                    xhr.open('PUT', res.url, true);
+                                    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                                    xhr.upload.onprogress = (e) => {
+                                        if (e.lengthComputable) {
+                                            r2InFlight[index] = e.loaded;
+                                            updateR2Progress();
+                                        }
+                                    };
+                                    xhr.onload = () => {
+                                        if (xhr.status >= 200 && xhr.status < 300) {
+                                            confirmChunk(index)
+                                                .then(() => {
+                                                    r2BytesDone += (end - start);
+                                                    delete r2InFlight[index];
+                                                    updateR2Progress();
+                                                    markR2ChunkDone(index);
+                                                    done();
+                                                })
+                                                .catch(() => retryChunk(index, done));
+                                        } else {
+                                            retryChunk(index, done);
+                                        }
+                                    };
+                                    xhr.onerror = () => retryChunk(index, done);
+                                    xhr.send(chunk);
+                                })
+                                .catch(() => retryChunk(index, done));
+                        };
+
+                        const retryChunk = (index, done) => {
+                            retryCount++;
+                            if (retryCount > maxRetries) {
+                                this.mobileUploading = false;
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Upload Failed',
+                                    text: 'R2 upload failed after multiple retries. Your connection might have dropped. Please refresh the page and select the file again to resume.',
+                                    confirmButtonColor: '#e50914',
+                                    background: '#1a1a1a',
+                                    color: '#fff'
+                                });
+                                return;
+                            }
+                            setTimeout(() => uploadChunk(index, done), 3000);
+                        };
+
+                        const r2Worker = () => {
+                            if (r2Completed) return;
+                            const index = currentChunk++;
+                            if (index >= totalChunks) return;
+                            uploadChunk(index, () => { if (!r2Completed) r2Worker(); });
+                        };
+
+                        const probeBody = new URLSearchParams();
+                        probeBody.append('upload_token', uploadToken);
+                        probeBody.append('chunk_index', 0);
+                        probeBody.append('total_chunks', totalChunks);
+                        probeBody.append('original_filename', videoFile.name);
+                        fetch('/upload/presign', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: probeBody.toString()
+                        })
+                            .then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status))
+                            .then(() => {
+                                for (let w = 0; w < R2_WORKERS; w++) r2Worker();
+                            })
+                            .catch(() => {
+                                startLegacyUpload();
                             });
                     } else {
                         submitFinalForm(formData);

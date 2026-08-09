@@ -30,6 +30,14 @@ class SettingsSeeder extends Seeder
             // Pixeldrain integration
             'pixeldrain_base_url' => config('pixeldrain.base_url', 'https://pixeldrain.net'),
             'pixeldrain_api_key' => config('pixeldrain.api_key'),
+
+            // Cloudflare R2 staging bucket (fast direct-upload relay)
+            'r2_enabled' => config('r2.enabled') ? 'true' : 'false',
+            'r2_account_id' => config('r2.account_id'),
+            'r2_access_key_id' => config('r2.access_key_id'),
+            'r2_secret_access_key' => config('r2.secret_access_key'),
+            'r2_bucket' => config('r2.bucket'),
+            'r2_endpoint' => config('r2.endpoint'),
         ];
 
         foreach ($defaults as $key => $value) {
