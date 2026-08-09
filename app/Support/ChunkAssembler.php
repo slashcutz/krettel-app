@@ -22,7 +22,20 @@ class ChunkAssembler
             throw new RuntimeException('Chunk dir not found: ' . $chunkDir);
         }
 
-        $expectedTotal = (int) @file_get_contents($chunkDir . '/.total');
+        $metaTotal = (int) @file_get_contents($chunkDir . '/.total');
+
+        // Always derive the count from the numbered chunk files actually
+        // present and take the max with any .total meta. This makes legacy
+        // dirs (written before .total existed) stitch correctly and protects
+        // against a resume reporting a mismatched chunk size/count.
+        $scanTotal = 0;
+        foreach (glob($chunkDir . '/*') ?: [] as $f) {
+            $base = basename($f);
+            if (ctype_digit($base)) {
+                $scanTotal = max($scanTotal, (int) $base + 1);
+            }
+        }
+        $expectedTotal = max($metaTotal, $scanTotal);
 
         $received = 0;
         for ($i = 0; $i < $expectedTotal; $i++) {
