@@ -33,7 +33,7 @@ module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
 main-args = ["-t", "/app/public", "-S", "0.0.0.0:8080"]
-env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=database", "CACHE_STORE=database", "QUEUE_CONNECTION=database"]
+env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=file", "CACHE_STORE=file", "QUEUE_CONNECTION=database"]
 
 [[command]]
 name = "migrate"
@@ -41,7 +41,7 @@ module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
 main-args = ["/app/deploy/wasmer/artisan.php", "migrate", "--force", "--no-interaction", "--seed", "--seeder=SettingsSeeder"]
-env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=database", "CACHE_STORE=database", "QUEUE_CONNECTION=database"]
+env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=file", "CACHE_STORE=file", "QUEUE_CONNECTION=database"]
 
 [[command]]
 name = "storage-link"
@@ -49,7 +49,7 @@ module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
 main-args = ["/app/artisan", "storage:link", "--force", "--no-interaction"]
-env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=database", "CACHE_STORE=database", "QUEUE_CONNECTION=database"]
+env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=file", "CACHE_STORE=file", "QUEUE_CONNECTION=database"]
 
 [[command]]
 name = "seed-admin"
@@ -57,7 +57,7 @@ module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
 main-args = ["/app/deploy/wasmer/artisan.php", "db:seed", "--class=AdminUserSeeder", "--force", "--no-interaction"]
-env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=database", "CACHE_STORE=database", "QUEUE_CONNECTION=database"]
+env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=file", "CACHE_STORE=file", "QUEUE_CONNECTION=database"]
 
 [[command]]
 name = "process-queue"
@@ -65,4 +65,4 @@ module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
 main-args = ["/app/artisan", "queue:work", "--stop-when-empty", "--sleep=3", "--tries=2", "--timeout=800"]
-env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=database", "CACHE_STORE=database", "QUEUE_CONNECTION=database"]
+env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=file", "CACHE_STORE=file", "QUEUE_CONNECTION=database"]
