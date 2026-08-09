@@ -1,0 +1,4 @@
+# Wasmer Edge deploys ignore list (equivalent of .dockerignore).
+# PHPix (the WASM PHP server) cannot parse Apache .htaccess directives and
+# crashes during request handling, so keep the file out of the deployed app.
+public/.htaccess
