@@ -1,0 +1,65 @@
+# Wasmer Edge package definition for krettel-app.
+# Maps the repo into /app (excluding node_modules/.git/etc. by mapping only
+# what the Laravel runtime needs) and runs PHP's built-in server against
+# public/ — the Laravel front controller.
+[dependencies]
+"php/php" = "=8.3.4"
+
+[fs]
+"/app/app" = "app"
+"/app/bootstrap" = "bootstrap"
+"/app/config" = "config"
+"/app/database" = "database"
+"/app/public" = "public"
+"/app/resources" = "resources"
+"/app/routes" = "routes"
+"/app/storage" = "storage"
+"/app/vendor" = "vendor"
+"/app/artisan" = "artisan"
+"/app/composer.json" = "composer.json"
+"/app/composer.lock" = "composer.lock"
+"/app/package.json" = "package.json"
+"/app/package-lock.json" = "package-lock.json"
+
+# Custom php.ini (large uploads) exposed under /config and picked up via PHPRC.
+"/config/" = "deploy/wasmer"
+
+[[command]]
+name = "run"
+module = "php/php:php"
+runner = "wasi"
+[command.annotations.wasi]
+main-args = ["-t", "/app/public", "-S", "0.0.0.0:8080"]
+env = ["PHPRC=/config/"]
+
+[[command]]
+name = "migrate"
+module = "php/php:php"
+runner = "wasi"
+[command.annotations.wasi]
+main-args = ["/app/artisan", "migrate", "--force", "--no-interaction", "--seed", "--seeder=SettingsSeeder"]
+env = ["PHPRC=/config/"]
+
+[[command]]
+name = "storage-link"
+module = "php/php:php"
+runner = "wasi"
+[command.annotations.wasi]
+main-args = ["/app/artisan", "storage:link", "--force"]
+env = ["PHPRC=/config/"]
+
+[[command]]
+name = "seed-admin"
+module = "php/php:php"
+runner = "wasi"
+[command.annotations.wasi]
+main-args = ["/app/artisan", "db:seed", "--class=AdminUserSeeder", "--force"]
+env = ["PHPRC=/config/"]
+
+[[command]]
+name = "process-queue"
+module = "php/php:php"
+runner = "wasi"
+[command.annotations.wasi]
+main-args = ["/app/artisan", "queue:work", "--stop-when-empty", "--sleep=3", "--tries=2", "--timeout=800"]
+env = ["PHPRC=/config/"]

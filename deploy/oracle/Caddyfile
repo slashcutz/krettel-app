@@ -1,0 +1,14 @@
+# Caddyfile — automatic HTTPS via Let's Encrypt for the krettel app.
+# SITE_DOMAIN is injected from the compose env (your domain, e.g. app.example.com).
+{$SITE_DOMAIN} {
+    # Large video uploads (up to ~4 GB, matching nginx client_max_body_size)
+    request_body {
+        max_size 4096MB
+    }
+
+    reverse_proxy app:8080 {
+        # Flush upstream responses immediately so video streams and upload
+        # progress don't get buffered/delayed by Caddy.
+        flush_interval -1
+    }
+}

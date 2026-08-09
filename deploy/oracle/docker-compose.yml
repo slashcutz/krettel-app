@@ -1,0 +1,54 @@
+name: krettel
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: krettel-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # The nginx entrypoint renders {{PORT}} from this env var. Caddy sits in
+      # front on 80/443, so the app itself only listens on the internal net.
+      - PORT=8080
+    volumes:
+      - krettel-storage:/var/www/html/storage
+    expose:
+      - "8080"
+    networks:
+      - krettel
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/login >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: krettel-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      - SITE_DOMAIN=${SITE_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - krettel
+
+volumes:
+  krettel-storage:
+  caddy-data:
+  caddy-config:
+
+networks:
+  krettel:
+    driver: bridge
