@@ -597,7 +597,13 @@
                     };
 
                     if (isFileMode) {
-                        const chunkSize = 2 * 1024 * 1024; // 2MB chunks for maximum mobile network stability
+                        // Adaptive chunk size: target ~96MB per chunk so a multi-GB file
+                        // uploads in a handful of round-trips instead of hundreds. Each
+                        // request through the sandbox has a large fixed overhead (~3s),
+                        // so fewer, larger chunks are dramatically faster. Clamped to
+                        // 8MB for small/mobile uploads to keep memory and retry cost sane.
+                        const adaptiveChunkSize = Math.max(8 * 1024 * 1024, Math.min(96 * 1024 * 1024, Math.ceil(videoFile.size / 24)));
+                        const chunkSize = adaptiveChunkSize;
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
                         let retryCount = 0;
