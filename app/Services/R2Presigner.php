@@ -179,6 +179,7 @@ class R2Presigner
         foreach ($extraHeaders as $name => $value) {
             $headers[strtolower((string) $name)] = (string) $value;
         }
+        ksort($headers);
         $canonicalHeaders = '';
         $signedHeaderNames = [];
         foreach ($headers as $name => $value) {

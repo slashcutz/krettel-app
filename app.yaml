@@ -19,7 +19,7 @@ env:
   TERABOX_WEB_HOST: https://www.1024terabox.com
   PIXELDRAIN_BASE_URL: https://pixeldrain.net
   PIXELDRAIN_STREAM_MODE: redirect
-  R2_ENABLED: 'false'
+  R2_ENABLED: 'true'
   R2_ACCOUNT_ID: 3e85fadf9a1a079abc34d060ad920a36
   R2_ACCESS_KEY_ID: ''
   R2_BUCKET: krettel

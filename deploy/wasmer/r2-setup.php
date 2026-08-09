@@ -120,7 +120,7 @@ $corsXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" .
 echo "\n[2/3] Installing bucket CORS policy...\n";
 echo "  Origins: " . implode(', ', $originList) . "\n";
 
-$request = $presigner->signedRequest('PUT', '/', $corsXml, [], ['Content-Type' => 'application/xml']);
+$request = $presigner->signedRequest('PUT', '/', $corsXml, ['cors' => ''], ['Content-Type' => 'application/xml']);
 $ch = curl_init($request['url']);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
