@@ -1,0 +1,113 @@
+# Wasmer Edge app config for krettel-app.
+#
+# Secrets (APP_KEY, Pixeldrain, TeraBox) are set via `wasmer app secret create`
+# — see deploy/wasmer/set-secrets.ps1 / README.md. They are NOT in this file.
+#
+# Notes:
+#   - DB is SQLite stored on the persistent `storage` volume (free tier: 1 GB).
+#   - There is no persistent queue worker on Edge, so a cron-style job drains
+#     the Laravel queue every 5 minutes (uploads to Pixeldrain happen there).
+#   - ffmpeg is NOT available in the Wasmer PHP sandbox: audio-track splitting,
+#     720p variants and subtitle extraction are skipped (same behaviour you see
+#     today on Render's 512 MB free plan). Original playback + Pixeldrain
+#     streaming keep working.
+#   - Playback uses a 307 redirect to the Pixeldrain CDN by default, so video
+#     bytes never pass through Wasmer (saves the 150 GB/mo free bandwidth).
+#     Set PIXELDRAIN_STREAM_MODE=proxy to stream through the edge instead.
+kind: wasmer.io/App.v0
+owner: slashcutz_official
+name: krettel-app
+description: Krettel video streaming app
+package: .
+
+env:
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_URL: https://krettel-app.wasmer.app
+  APP_LOCALE: en
+  APP_FALLBACK_LOCALE: en
+  FILESYSTEM_DISK: local
+  SESSION_DRIVER: database
+  CACHE_STORE: database
+  QUEUE_CONNECTION: database
+  DB_CONNECTION: sqlite
+  DB_DATABASE: /app/storage/database.sqlite
+  TERABOX_REMOTE_DIR: /Apps/Krettel
+  TERABOX_WEB_HOST: https://www.1024terabox.com
+  PIXELDRAIN_BASE_URL: https://pixeldrain.net
+  PIXELDRAIN_STREAM_MODE: redirect
+
+volumes:
+  - name: storage
+    mount: /app/storage
+
+scaling:
+  mode: single_concurrency
+
+health_checks:
+  - http:
+      method: get
+      path: /login
+      interval: 30s
+      timeout: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 1
+      expected_status_codes:
+        - 200
+        - 302
+
+jobs:
+  # Clear stale compiled caches (repo may ship bootstrap/cache from Render)
+  # so config/routes are regenerated for the Wasmer filesystem layout.
+  - name: setup-optimize-clear
+    trigger: post-deployment
+    action:
+      execute:
+        command: php
+        cli_args: ["artisan", "optimize:clear"]
+        timeout: 5m
+
+  - name: setup-migrate
+    trigger: post-deployment
+    action:
+      execute:
+        command: php
+        cli_args:
+          - artisan
+          - migrate
+          - --force
+          - --no-interaction
+          - --seed
+          - --seeder=SettingsSeeder
+        timeout: 5m
+
+  - name: setup-storage-link
+    trigger: post-deployment
+    action:
+      execute:
+        command: php
+        cli_args: ["artisan", "storage:link", "--force"]
+        timeout: 5m
+
+  - name: setup-seed-admin
+    trigger: post-deployment
+    action:
+      execute:
+        command: php
+        cli_args: ["artisan", "db:seed", "--class=AdminUserSeeder", "--force"]
+        timeout: 5m
+
+  # No persistent daemon on Edge: drain the database queue every 5 minutes.
+  - name: process-queue
+    trigger: "*/5 * * * *"
+    action:
+      execute:
+        command: php
+        cli_args:
+          - artisan
+          - queue:work
+          - --stop-when-empty
+          - --sleep=3
+          - --tries=2
+          - --timeout=800
+        timeout: 15m
