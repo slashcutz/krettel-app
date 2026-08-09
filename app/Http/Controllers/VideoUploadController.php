@@ -899,7 +899,6 @@ class VideoUploadController extends Controller
         $uploadToken = $request->input('upload_token');
         $totalChunks = (int) $request->input('total_chunks', 0);
         $filename = $request->input('original_filename', 'video.mp4');
-        
         if (!$uploadToken || $totalChunks <= 0) {
             return response()->json(['error' => 'Missing token or chunks'], 400);
         }
@@ -932,6 +931,33 @@ class VideoUploadController extends Controller
         return response()->json([
             'uploaded_chunks' => $uploadedChunks,
         ]);
+    }
+
+        public function resetChunks(Request $request)
+    {
+        $uploadToken = (string) $request->input('upload_token', '');
+
+        if ($uploadToken === '') {
+            return response()->json(['error' => 'Missing token'], 400);
+        }
+
+        $chunkDir = storage_path('app/private/chunks/' . $uploadToken);
+
+        if (is_dir($chunkDir)) {
+            foreach (glob($chunkDir . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @rmdir($chunkDir);
+            Log::channel('krettel')->info('[UPLOAD] Chunk session reset.', ['upload_token' => $uploadToken]);
+        }
+
+        // Also drop any cached progress for this token so the sync bar
+        // doesn't keep showing a stale pixeldrain push.
+        if ($uploadToken !== '') {
+            \Illuminate\Support\Facades\Cache::forget('pixeldrain_upload_' . $uploadToken);
+        }
+
+        return response()->json(['reset' => true, 'upload_token' => $uploadToken]);
     }
 
     public function chunk(Request $request)

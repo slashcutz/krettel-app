@@ -312,6 +312,17 @@
                                     </div>
                                     
                                     <p class="mt-8 text-xs text-gray-500 max-w-[250px] mx-auto">Please keep the app open and do not lock your screen until the upload finishes.</p>
+
+                                    <template x-if="askResume">
+                                        <div class="mt-5 rounded-xl border border-amber-800 bg-amber-950/30 p-4 w-full">
+                                            <p class="text-sm text-amber-200 font-medium mb-1">Previous upload found</p>
+                                            <p class="text-xs text-gray-400 mb-4">This file was already uploaded to the server before. Reuse it (instant) or upload from scratch?</p>
+                                            <div class="flex gap-2">
+                                                <button @click="askResumeSubmit()" class="flex-1 bg-primary text-white text-sm rounded-lg px-3 py-2">Reuse existing</button>
+                                                <button @click="askResumeStartFresh()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg px-3 py-2">Upload from scratch</button>
+                                            </div>
+                                        </div>
+                                    </template>
                                 </div>
                             </div>
 
@@ -367,6 +378,9 @@
                 mobileEta: 'calculating...',
                 mobileLastLoaded: 0,
                 mobileLastTime: 0,
+                askResume: false,
+                askResumeSubmit: null,
+                askResumeStartFresh: null,
                 triggerFile(id) {
                     document.getElementById(id).click();
                 },
@@ -702,12 +716,40 @@
                             .then(res => res.json())
                             .then(data => {
                                 if (data && data.status === 'completed') {
-                                    // All chunks are already on the server.
-                                    formData.delete('video_file');
-                                    formData.append('original_filename', videoFile.name);
-                                    this.mobileProgress = 100;
-                                    this.mobileStatus = 'Upload complete. Saving to database...';
-                                    submitFinalForm(formData);
+                                    // All chunks are already on the server from a
+                                    // previous session. Let the user decide: reuse
+                                    // them, or wipe them and upload from scratch.
+                                    this.askResume = true;
+                                    this.askResumeSubmit = () => {
+                                        formData.delete('video_file');
+                                        formData.append('original_filename', videoFile.name);
+                                        this.mobileProgress = 100;
+                                        this.mobileStatus = 'Upload complete. Saving to database...';
+                                        submitFinalForm(formData);
+                                    };
+                                    this.askResumeStartFresh = () => {
+                                        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+                                        const body = new URLSearchParams();
+                                        body.append('upload_token', uploadToken);
+                                        fetch('/upload/reset', {
+                                            method: 'POST',
+                                            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                                            body: body
+                                        })
+                                        .then(() => {
+                                            this.askResume = false;
+                                            this.mobileProgress = 0;
+                                            this.mobileStatus = '';
+                                            currentChunk = 0;
+                                            uploadNextChunk();
+                                        })
+                                        .catch(err => {
+                                            console.warn('Reset failed, starting from 0 anyway', err);
+                                            this.askResume = false;
+                                            currentChunk = 0;
+                                            uploadNextChunk();
+                                        });
+                                    };
                                     return;
                                 }
                                 if (data && data.uploaded_chunks) {
