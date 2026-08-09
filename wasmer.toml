@@ -48,7 +48,7 @@ name = "storage-link"
 module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
-main-args = ["/app/artisan", "storage:link", "--force"]
+main-args = ["/app/artisan", "storage:link", "--force", "--no-interaction"]
 env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=database", "CACHE_STORE=database", "QUEUE_CONNECTION=database"]
 
 [[command]]
@@ -56,7 +56,7 @@ name = "seed-admin"
 module = "php/php:php"
 runner = "wasi"
 [command.annotations.wasi]
-main-args = ["/app/deploy/wasmer/artisan.php", "db:seed", "--class=AdminUserSeeder", "--force"]
+main-args = ["/app/deploy/wasmer/artisan.php", "db:seed", "--class=AdminUserSeeder", "--force", "--no-interaction"]
 env = ["PHPRC=/config/", "DB_CONNECTION=sqlite", "DB_DATABASE=/app/storage/database.sqlite", "APP_DEBUG=false", "APP_ENV=production", "SESSION_DRIVER=database", "CACHE_STORE=database", "QUEUE_CONNECTION=database"]
 
 [[command]]
