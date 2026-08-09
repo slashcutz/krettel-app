@@ -611,18 +611,31 @@
                     };
 
                     if (isFileMode) {
-                        // Adaptive chunk size: target ~96MB per chunk so a multi-GB file
-                        // uploads in a handful of round-trips instead of hundreds. Each
-                        // request through the sandbox has a large fixed overhead (~3s),
-                        // so fewer, larger chunks are dramatically faster. Clamped to
-                        // 8MB for small/mobile uploads to keep memory and retry cost sane.
-                        const adaptiveChunkSize = Math.max(8 * 1024 * 1024, Math.min(96 * 1024 * 1024, Math.ceil(videoFile.size / 24)));
-                        const chunkSize = adaptiveChunkSize;
+                        // Mobile inline uploads use small 8MB chunks: a single large
+                        // PUT can stall indefinitely on flaky cellular links, and
+                        // mobile browsers cap concurrent connections. Desktop uses
+                        // adaptive ~96MB chunks to minimize round-trips.
+                        const isMobileUpload = window.matchMedia('(max-width: 767px), (pointer: coarse)').matches;
+                        const chunkSize = isMobileUpload
+                            ? 8 * 1024 * 1024
+                            : Math.max(8 * 1024 * 1024, Math.min(96 * 1024 * 1024, Math.ceil(videoFile.size / 24)));
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
                         let retryCount = 0;
                         const maxRetries = 20; // Increased to 20 for even better resilience on screen wake
                         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+                        // Abortable fetch: flaky mobile links can stall without ever
+                        // erroring, so a bare fetch would hang forever instead of
+                        // falling back/retrying. Timeout everything small.
+                        const fetchWithTimeout = (url, options, ms) => {
+                            const controller = new AbortController();
+                            const timer = setTimeout(() => controller.abort(), ms);
+                            return fetch(url, Object.assign({}, options, { signal: controller.signal }))
+                                .finally(() => clearTimeout(timer));
+                        };
+                        // Per-chunk transfer timeout, scaled to chunk size (assumes a
+                        // minimum 256KB/s so it never fires on slow-but-working links).
+                        const chunkTimeoutMs = Math.max(120000, Math.ceil(chunkSize / (256 * 1024)) * 1000);
 
                         const startLegacyUpload = () => {
                         const uploadNextChunk = () => {
@@ -645,6 +658,8 @@
                             xhr.setRequestHeader('Accept', 'application/json');
                             const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
                             xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+                            xhr.timeout = chunkTimeoutMs;
+                            xhr.ontimeout = () => handleChunkError();
                             
                             this.mobileStatus = 'Starting chunk ' + (currentChunk + 1) + ' of ' + totalChunks + '...';
 
@@ -714,7 +729,7 @@
                             xhr.send(chunkData);
                         };
 
-                        fetch('/upload/resume-check?upload_token=' + uploadToken + '&total_chunks=' + totalChunks + '&original_filename=' + encodeURIComponent(videoFile.name) + '&_=' + Date.now())
+                        fetchWithTimeout('/upload/resume-check?upload_token=' + uploadToken + '&total_chunks=' + totalChunks + '&original_filename=' + encodeURIComponent(videoFile.name) + '&_=' + Date.now(), {}, 15000)
                             .then(res => res.json())
                             .then(data => {
                                 if (data && data.status === 'completed') {
@@ -733,11 +748,11 @@
                                         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
                                         const body = new URLSearchParams();
                                         body.append('upload_token', uploadToken);
-                                        fetch('/upload/reset', {
+                                        fetchWithTimeout('/upload/reset', {
                                             method: 'POST',
                                             headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
                                             body: body
-                                        })
+                                        }, 15000)
                                         .then(() => {
                                             this.askResume = false;
                                             this.mobileProgress = 0;
@@ -775,7 +790,7 @@
                         const r2DoneSet = {};
                         const r2InFlight = {};
                         let r2BytesDone = 0;
-                        const R2_WORKERS = 4;
+                        const R2_WORKERS = isMobileUpload ? 2 : 4;
 
                         const presignChunk = (index) => {
                             const body = new URLSearchParams();
@@ -783,22 +798,22 @@
                             body.append('chunk_index', index);
                             body.append('total_chunks', totalChunks);
                             body.append('original_filename', videoFile.name);
-                            return fetch('/upload/presign', {
+                            return fetchWithTimeout('/upload/presign', {
                                 method: 'POST',
                                 headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
                                 body: body.toString()
-                            }).then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status));
+                            }, 15000).then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status));
                         };
 
                         const confirmChunk = (index) => {
                             const body = new URLSearchParams();
                             body.append('upload_token', uploadToken);
                             body.append('chunk_index', index);
-                            return fetch('/upload/chunk-done', {
+                            return fetchWithTimeout('/upload/chunk-done', {
                                 method: 'POST',
                                 headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
                                 body: body.toString()
-                            });
+                            }, 15000);
                         };
 
                         const updateR2Progress = () => {
@@ -862,6 +877,8 @@
                                     const xhr = new XMLHttpRequest();
                                     xhr.open('PUT', res.url, true);
                                     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                                    xhr.timeout = chunkTimeoutMs;
+                                    xhr.ontimeout = () => retryChunk(index, done);
                                     xhr.upload.onprogress = (e) => {
                                         if (e.lengthComputable) {
                                             r2InFlight[index] = e.loaded;
@@ -875,6 +892,7 @@
                                                     r2BytesDone += (end - start);
                                                     delete r2InFlight[index];
                                                     updateR2Progress();
+                                                    retryCount = 0;
                                                     markR2ChunkDone(index);
                                                     done();
                                                 })
@@ -918,11 +936,11 @@
                         probeBody.append('chunk_index', 0);
                         probeBody.append('total_chunks', totalChunks);
                         probeBody.append('original_filename', videoFile.name);
-                        fetch('/upload/presign', {
+                        fetchWithTimeout('/upload/presign', {
                             method: 'POST',
                             headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: probeBody.toString()
-                        })
+                        }, 15000)
                             .then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status))
                             .then(() => {
                                 for (let w = 0; w < R2_WORKERS; w++) r2Worker();
