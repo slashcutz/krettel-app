@@ -21,6 +21,14 @@ return [
 
     'email' => env('PIXELDRAIN_EMAIL'),
 
+    // How video playback is served to the browser:
+    //   redirect -> 307 to the Pixeldrain file URL (browser streams straight
+    //               from Pixeldrain; zero Render egress bandwidth). Seek works
+    //               because /api/file/{id} supports byte-range requests.
+    //   proxy    -> stream through this server (fallback if Pixeldrain hotlink
+    //               protection kicks in on the free tier).
+    'stream_mode' => env('PIXELDRAIN_STREAM_MODE', 'redirect'),
+
     'password' => env('PIXELDRAIN_PASSWORD'),
 
 ];

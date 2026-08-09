@@ -23,6 +23,14 @@
         // Eager Loading Script: Fetch the first 5MB of the video immediately 
         // to warm up the browser cache and ensure lightning-fast playback start.
         (function() {
+            // Pixeldrain videos play via a 307 redirect to the Pixeldrain CDN.
+            // Pre-fetching here would download 5MB cross-origin on every page
+            // open (wasted bandwidth + hotlink risk) and cannot warm our cache,
+            // so skip it. The <video> element starts buffering the redirect
+            // target (Pixeldrain) immediately on its own.
+            @if($video->storage_provider === 'pixeldrain')
+                return;
+            @endif
             const streamUrl = "{{ ($video['video_url'] ?? null) === 'terabox-remote' ? route('video.stream', $video->id) : ($streamUrl ?? '') }}";
             if (streamUrl && streamUrl !== 'processing' && streamUrl !== 'pending-upload') {
                 fetch(streamUrl, {

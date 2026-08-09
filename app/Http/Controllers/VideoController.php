@@ -83,9 +83,13 @@ class VideoController extends Controller
         } elseif ($video->video_url === 'terabox-remote') {
             $streamMime = 'application/x-mpegURL';
         } elseif ($video->storage_provider === 'pixeldrain' && $video->storage_folder) {
-            $fileName = static::pixeldrainFileName($video->storage_folder);
-            if ($fileName) {
-                $streamMime = static::mimeForPath($fileName);
+            // In redirect mode Pixeldrain advertises the real Content-Type, so
+            // skip the (potentially slow) metadata lookup on page load.
+            if (! $this->shouldRedirectPixeldrain()) {
+                $fileName = static::pixeldrainFileName($video->storage_folder);
+                if ($fileName) {
+                    $streamMime = static::mimeForPath($fileName);
+                }
             }
         }
 
@@ -137,8 +141,10 @@ class VideoController extends Controller
             return '/stream/hls/' . $video->id . '/index.m3u8';
         }
 
-        // Pixeldrain videos are proxied through our server (no transcode —
-        // original resolution plays as-is).
+        // Pixeldrain videos play through the video.stream.pixeldrain route,
+        // which 307-redirects the browser to the Pixeldrain file URL by
+        // default (no transcode — original resolution plays as-is, and the
+        // browser streams straight from Pixeldrain to save server bandwidth).
         if ($video->storage_provider === 'pixeldrain' && $video->storage_folder) {
             return Route::has('video.stream.pixeldrain')
                 ? route('video.stream.pixeldrain', ['video' => $video->id])
@@ -356,18 +362,23 @@ class VideoController extends Controller
     }
 
     /**
-     * Stream a Pixeldrain-hosted video through our server.
+     * Stream a Pixeldrain-hosted video.
      *
-     * Pixeldrain has no transcode tier — the uploaded file is served at its
-     * original resolution, so upload 720p/1080p MP4 and the player gets real
-     * 720p+. Requests are proxied (the browser never talks to pixeldrain
-     * directly, which sidesteps free-tier hotlink protection and ISP blocks)
-     * and upstream Range requests are forwarded so seeking works.
+     * In redirect mode (default) the browser is sent a 307 to the Pixeldrain
+     * file URL so playback happens straight from Pixeldrain's CDN — the video
+     * bytes never pass through this server, saving Render egress bandwidth.
+     * Pixeldrain's /api/file/{id} endpoint supports byte-range requests, so
+     * seeking still works. In proxy mode we fall back to streaming through
+     * the server (sidesteps free-tier hotlink protection but uses bandwidth).
      */
     public function streamPixeldrain(Video $video)
     {
         if ($video->storage_provider !== 'pixeldrain' || ! $video->storage_folder) {
             abort(404);
+        }
+
+        if ($this->shouldRedirectPixeldrain()) {
+            return $this->redirectPixeldrain($video->storage_folder);
         }
 
         // The pixeldrain file id carries no extension, so resolve the real
@@ -380,6 +391,29 @@ class VideoController extends Controller
             $video->storage_folder,
             $fileName ? static::mimeForPath($fileName) : 'video/mp4'
         );
+    }
+
+    /**
+     * Whether playback should be served via a 307 redirect to Pixeldrain
+     * (saves server bandwidth) instead of proxying through this server.
+     */
+    protected function shouldRedirectPixeldrain(): bool
+    {
+        return config('pixeldrain.stream_mode', 'redirect') === 'redirect';
+    }
+
+    /**
+     * 307 to the direct Pixeldrain file URL. The browser re-issues the same
+     * request (including Range headers for seeking) against the new location.
+     */
+    protected function redirectPixeldrain(string $fileId): \Illuminate\Http\RedirectResponse
+    {
+        $url = app(\App\Services\PixeldrainClient::class)->fileUrl($fileId);
+
+        return redirect()->away($url, 307, [
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'no-store',
+        ]);
     }
 
     /**
@@ -515,6 +549,10 @@ class VideoController extends Controller
             abort(404);
         }
 
+        if ($this->shouldRedirectPixeldrain()) {
+            return $this->redirectPixeldrain($variant->file_path);
+        }
+
         return $this->proxyPixeldrainFile($variant->file_path, 'video/mp4');
     }
 
@@ -534,7 +572,13 @@ class VideoController extends Controller
             abort(404);
         }
 
-        return $this->proxyPixeldrainFile(substr($fileId, strlen('pixeldrain://')), 'text/vtt; charset=utf-8');
+        $fileId = substr($fileId, strlen('pixeldrain://'));
+
+        if ($this->shouldRedirectPixeldrain()) {
+            return $this->redirectPixeldrain($fileId);
+        }
+
+        return $this->proxyPixeldrainFile($fileId, 'text/vtt; charset=utf-8');
     }
 
     /**

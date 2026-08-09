@@ -26,6 +26,10 @@ class SettingsSeeder extends Seeder
             'terabox_remote_dir' => config('terabox.remote_dir', '/Apps/Krettel'),
             'terabox_web_host' => config('terabox.web_host', 'https://www.1024terabox.com'),
             'terabox_user_agent' => config('terabox.user_agent'),
+
+            // Pixeldrain integration
+            'pixeldrain_base_url' => config('pixeldrain.base_url', 'https://pixeldrain.net'),
+            'pixeldrain_api_key' => config('pixeldrain.api_key'),
         ];
 
         foreach ($defaults as $key => $value) {
