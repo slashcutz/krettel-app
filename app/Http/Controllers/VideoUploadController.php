@@ -9,6 +9,7 @@ use App\Models\Language;
 use App\Jobs\TranscodeVideoToHls;
 use App\Jobs\ProcessPixeldrainMedia;
 use App\Jobs\UploadVideoToTeraBox;
+use App\Jobs\ProcessChunkedVideo;
 use App\Support\LanguageCodes;
 use App\Support\MediaProbe;
 use App\Support\PixeldrainImageStore;
@@ -66,6 +67,8 @@ class VideoUploadController extends Controller
 
         $stagingPath = null;
         $videoPath = null;
+        $isChunkedUpload = false;
+        $originalName = (string) $request->input('original_filename', 'video.mp4');
         if (!$isLinked) {
             if ($request->filled('stitched_file_path')) {
                 $stagingPath = $request->input('stitched_file_path');
@@ -113,6 +116,23 @@ class VideoUploadController extends Controller
                     throw $e;
                 }
             }
+            }
+
+            // Chunked upload: the browser already pushed all chunks to
+            // storage/app/private/chunks/{token}. No stitched file exists yet —
+            // the background job stitches + uploads, so store() returns fast
+            // instead of blowing the gateway timeout stitching multi-GB inline.
+            if ($stagingPath === null && $videoPath === null) {
+                $uploadToken = (string) $request->input('upload_token', '');
+                $originalName = (string) $request->input('original_filename', 'video.mp4');
+                $chunkDir = storage_path('app/private/chunks/' . $uploadToken);
+                if ($uploadToken !== '' && is_dir($chunkDir)) {
+                    $isChunkedUpload = true;
+                    Log::channel('krettel')->info('[UPLOAD] Chunked upload detected, deferred stitch.', [
+                        'upload_token' => $uploadToken,
+                        'original_filename' => $originalName,
+                    ]);
+                }
             }
         } else {
             Log::channel('krettel')->warning('[UPLOAD] No video file uploaded or file linked via TeraBox path.');
@@ -290,6 +310,12 @@ class VideoUploadController extends Controller
                 Log::channel('krettel')->info('[UPLOAD] Status -> terabox (TeraBox upload queued).', ['video_id' => $video->id]);
                 UploadVideoToTeraBox::dispatch($video, $stagingPath);
             }
+        } elseif ($isChunkedUpload) {
+            Log::channel('krettel')->info('[UPLOAD] Chunked upload -> deferred stitch job dispatched.', [
+                'video_id' => $video->id,
+                'upload_token' => $uploadToken,
+            ]);
+            ProcessChunkedVideo::dispatch($video, $uploadToken, $originalName, $storageProvider, $savedAudioCount);
         } elseif ($isLinked) {
             Log::channel('krettel')->info('[UPLOAD] Video linked instantly from TeraBox. No sync job dispatched.', ['video_id' => $video->id]);
             // Warm the link cache
@@ -874,18 +900,9 @@ class VideoUploadController extends Controller
             return response()->json(['error' => 'Missing token or chunks'], 400);
         }
 
-        // Check if fully stitched file already exists (in case connection dropped during stitch phase)
-        $cleanName = preg_replace('/[^a-zA-Z0-9.\-_]/', '', $filename);
-        $stitchedRelative = 'pending-uploads/' . $uploadToken . '_' . $cleanName;
-        $finalPath = storage_path('app/private/' . $stitchedRelative);
-        
-        if (file_exists($finalPath) && filesize($finalPath) > 0) {
-            return response()->json([
-                'uploaded_chunks' => $totalChunks,
-                'stitched_file_path' => $stitchedRelative
-            ]);
-        }
-
+        // Check if the full chunk set already exists (in case the connection
+        // dropped after the final chunk was received but before the browser
+        // got the completion response, or across a resume).
         $chunkDir = storage_path('app/private/chunks/' . $uploadToken);
         
         if (!file_exists($chunkDir)) {
@@ -899,6 +916,13 @@ class VideoUploadController extends Controller
             } else {
                 break; // Stop at first missing chunk to ensure continuous stream
             }
+        }
+
+        if ($uploadedChunks >= $totalChunks) {
+            return response()->json([
+                'uploaded_chunks' => $uploadedChunks,
+                'status' => 'completed',
+            ]);
         }
 
         return response()->json([
@@ -923,37 +947,29 @@ class VideoUploadController extends Controller
             mkdir($chunkDir, 0777, true);
         }
 
+        // Record the expected chunk count so the background job can verify the
+        // set is complete before stitching (a resume may have uploaded chunks
+        // in a previous session).
+        if (!file_exists($chunkDir . '/.total')) {
+            file_put_contents($chunkDir . '/.total', (string) $totalChunks);
+        }
+
         $chunkPath = $chunkDir . '/' . $chunkIndex;
         move_uploaded_file($file->getPathname(), $chunkPath);
 
-        // Check if all chunks received
-        $chunks = array_diff(scandir($chunkDir), array('..', '.'));
-        if (count($chunks) == $totalChunks) {
-            // Stitch
-            if (!file_exists(storage_path('app/private/pending-uploads'))) {
-                mkdir(storage_path('app/private/pending-uploads'), 0777, true);
+        // Do NOT stitch here. Stitching a multi-GB upload inline blows the
+        // gateway request timeout and leaves the browser hanging at 100%.
+        // The background job (ProcessPixeldrainMedia / UploadVideoToTeraBox)
+        // stitches + uploads with no HTTP timeout.
+        $received = 0;
+        for ($i = 0; $i < (int) $totalChunks; $i++) {
+            if (file_exists($chunkDir . '/' . $i)) {
+                $received++;
             }
-            $cleanName = preg_replace('/[^a-zA-Z0-9.\-_]/', '', $filename);
-            $stitchedRelative = 'pending-uploads/' . $uploadToken . '_' . $cleanName;
-            $finalPath = storage_path('app/private/' . $stitchedRelative);
-            
-            $out = fopen($finalPath, 'wb');
-            for ($i = 0; $i < $totalChunks; $i++) {
-                $inPath = $chunkDir . '/' . $i;
-                if (file_exists($inPath)) {
-                    $in = fopen($inPath, 'rb');
-                    stream_copy_to_stream($in, $out);
-                    fclose($in);
-                    unlink($inPath);
-                }
-            }
-            fclose($out);
-            rmdir($chunkDir);
+        }
 
-            return response()->json([
-                'status' => 'completed',
-                'stitched_file_path' => $stitchedRelative
-            ]);
+        if ($received >= (int) $totalChunks) {
+            return response()->json(['status' => 'completed']);
         }
 
         return response()->json(['status' => 'chunk_received']);

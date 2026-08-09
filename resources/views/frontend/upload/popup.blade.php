@@ -504,7 +504,7 @@
 
                                     if (res.status === 'completed') {
                                         formData.delete('video_file');
-                                        formData.append('stitched_file_path', res.stitched_file_path);
+                                        formData.append('original_filename', videoFile.name);
                                         submitFinalForm(formData);
                                     } else {
                                         currentChunk++;
@@ -534,10 +534,10 @@
                         fetch('/upload/resume-check?upload_token=' + this.uploadToken + '&total_chunks=' + totalChunks + '&original_filename=' + encodeURIComponent(videoFile.name) + '&_=' + Date.now())
                             .then(res => res.json())
                             .then(data => {
-                                if (data && data.stitched_file_path) {
-                                    // The file was already fully uploaded and stitched!
+                                if (data && data.status === 'completed') {
+                                    // All chunks are already on the server.
                                     formData.delete('video_file');
-                                    formData.append('stitched_file_path', data.stitched_file_path);
+                                    formData.append('original_filename', videoFile.name);
                                     this.mobileProgress = 100;
                                     this.mobileStatus = 'Upload complete. Saving to database...';
                                     submitFinalForm(formData);
