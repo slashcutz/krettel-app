@@ -1,9 +1,8 @@
-# PHPix-safe Laravel front-controller rewrite.
-# NO Apache-only directives here (<IfModule>, Options, php_value) — PHPix's
-# .htaccess evaluator chokes on those. This ships to Wasmer Edge and routes
-# every non-file request to index.php.
+# PHPix-safe Laravel front-controller rewrite for Wasmer Edge.
+# No Apache-only directives (<IfModule>, Options); absolute /index.php target
+# because PHPix's htaccess evaluator validates the rewritten request path.
 RewriteEngine On
 
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^ index.php [L]
+RewriteRule ^ /index.php [L]
