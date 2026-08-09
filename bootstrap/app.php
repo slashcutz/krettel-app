@@ -5,6 +5,18 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
+$__storageBase = dirname(__DIR__).'/storage';
+foreach ([
+    $__storageBase.'/framework/cache/data',
+    $__storageBase.'/framework/sessions',
+    $__storageBase.'/framework/views',
+    $__storageBase.'/logs',
+] as $dir) {
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0777, true);
+    }
+}
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
