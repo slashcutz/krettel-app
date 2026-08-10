@@ -412,6 +412,21 @@
                     this.syncLastTime = 0;
                     this.syncLastLoaded = 0;
 
+                    let wakeLock = null;
+                    const wakeLockHandler = () => { if (!document.hidden && !wakeLock) requestWakeLock(); };
+                    const requestWakeLock = () => {
+                        if (!('wakeLock' in navigator)) return;
+                        navigator.wakeLock.request('screen')
+                            .then(lock => { wakeLock = lock; })
+                            .catch(() => {});
+                    };
+                    const releaseWakeLock = () => {
+                        document.removeEventListener('visibilitychange', wakeLockHandler);
+                        if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+                    };
+                    requestWakeLock();
+                    document.addEventListener('visibilitychange', wakeLockHandler);
+
                     const submitFinalForm = (finalFormData) => {
                         const xhr = new XMLHttpRequest();
                         xhr.open('POST', action, true);
@@ -420,6 +435,7 @@
 
                         xhr.onload = () => {
                             this.stopPixeldrainSync();
+                            releaseWakeLock();
                             if (xhr.status >= 200 && xhr.status < 300) {
                                 let data = {};
                                 try { data = JSON.parse(xhr.responseText); } catch (e) {}
@@ -444,6 +460,7 @@
                         };
                         xhr.onerror = () => {
                             this.stopPixeldrainSync();
+                            releaseWakeLock();
                             this.status = 'error';
                             this.errorMessage = 'A network error occurred during final save.';
                         };
@@ -460,7 +477,7 @@
                         // request through the sandbox has a large fixed overhead (~3s),
                         // so fewer, larger chunks are dramatically faster. Clamped to
                         // 8MB for small/mobile uploads to keep memory and retry cost sane.
-                        const adaptiveChunkSize = Math.max(8 * 1024 * 1024, Math.min(96 * 1024 * 1024, Math.ceil(videoFile.size / 24)));
+                        const adaptiveChunkSize = Math.max(8 * 1024 * 1024, Math.min(32 * 1024 * 1024, Math.ceil(videoFile.size / 48)));
                         const chunkSize = adaptiveChunkSize;
                         const totalChunks = Math.ceil(videoFile.size / chunkSize);
                         let currentChunk = 0;
@@ -618,10 +635,26 @@
                         // calling back only to mint presigned URLs and confirm
                         // each chunk. Falls back to the server chunk upload above.
                         let r2Completed = false;
+                        let r2Aborted = false;
                         const r2DoneSet = {};
                         const r2InFlight = {};
+                        const r2Xhr = {};
+                        const r2LastTick = {};
+                        const r2Retries = {};
                         let r2BytesDone = 0;
                         const R2_WORKERS = 4;
+                        const R2_STALL_MS = 45000;
+                        const R2_MAX_RETRIES = 15;
+                        const r2Watchdog = () => {
+                            const now = Date.now();
+                            for (const index in r2Xhr) {
+                                const last = r2LastTick[index];
+                                if (last && now - last > R2_STALL_MS) {
+                                    try { r2Xhr[index].abort(); } catch (e) {}
+                                }
+                            }
+                            if (!r2Completed && !r2Aborted) setTimeout(r2Watchdog, 5000);
+                        };
 
                         const presignChunk = (index) => {
                             const body = new URLSearchParams();
@@ -668,7 +701,7 @@
                         };
 
                         const submitWhenR2Done = () => {
-                            if (r2Completed) return;
+                            if (r2Completed || r2Aborted) return;
                             r2Completed = true;
                             formData.delete('video_file');
                             formData.append('original_filename', videoFile.name);
@@ -676,14 +709,36 @@
                         };
 
                         const markR2ChunkDone = (index) => {
+                            if (r2Aborted) return;
                             r2DoneSet[index] = true;
                             if (Object.keys(r2DoneSet).length >= totalChunks) {
                                 submitWhenR2Done();
                             }
                         };
 
+                        const failR2Upload = (index, done) => {
+                            r2Aborted = true;
+                            r2Completed = true;
+                            for (const k in r2Xhr) { try { r2Xhr[k].abort(); } catch (e) {} }
+                            this.status = 'error';
+                            this.errorMessage = 'Chunk ' + (index + 1) + ' of ' + totalChunks + ' failed to upload after ' + R2_MAX_RETRIES + ' attempts. Please refresh the page and select the same file to resume instantly.';
+                            if (done) done();
+                        };
+
+                        const retryChunk = (index, done) => {
+                            if (r2Aborted) { if (done) done(); return; }
+                            r2Retries[index] = (r2Retries[index] || 0) + 1;
+                            if (r2Retries[index] > R2_MAX_RETRIES) {
+                                failR2Upload(index, done);
+                                return;
+                            }
+                            setTimeout(() => uploadChunk(index, done), 3000);
+                        };
+
                         const uploadChunk = (index, done) => {
-                            if (index >= totalChunks) { done(); return; }
+                            if (r2Aborted) { if (done) done(); return; }
+                            if (index >= totalChunks) { if (done) done(); return; }
+                            if (r2DoneSet[index]) { if (done) done(); return; }
                             const start = index * chunkSize;
                             const end = Math.min(start + chunkSize, videoFile.size);
                             const chunk = videoFile.slice(start, end);
@@ -694,78 +749,107 @@
                                         r2BytesDone += (end - start);
                                         updateR2Progress();
                                         markR2ChunkDone(index);
-                                        done();
+                                        if (done) done();
                                         return;
                                     }
                                     if (!res.url) throw new Error('No presigned URL returned');
 
                                     const xhr = new XMLHttpRequest();
+                                    r2Xhr[index] = xhr;
+                                    r2LastTick[index] = Date.now();
                                     xhr.open('PUT', res.url, true);
                                     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
                                     xhr.timeout = chunkTimeoutMs;
-                                    xhr.ontimeout = () => retryChunk(index, done);
                                     xhr.upload.onprogress = (e) => {
                                         if (e.lengthComputable) {
+                                            r2LastTick[index] = Date.now();
                                             r2InFlight[index] = e.loaded;
                                             updateR2Progress();
                                         }
                                     };
                                     xhr.onload = () => {
+                                        delete r2Xhr[index];
                                         if (xhr.status >= 200 && xhr.status < 300) {
                                             confirmChunk(index)
                                                 .then(() => {
                                                     r2BytesDone += (end - start);
                                                     delete r2InFlight[index];
                                                     updateR2Progress();
-                                                    retryCount = 0;
                                                     markR2ChunkDone(index);
-                                                    done();
+                                                    if (done) done();
                                                 })
                                                 .catch(() => retryChunk(index, done));
                                         } else {
                                             retryChunk(index, done);
                                         }
                                     };
-                                    xhr.onerror = () => retryChunk(index, done);
+                                    xhr.onerror = () => {
+                                        delete r2Xhr[index];
+                                        delete r2InFlight[index];
+                                        retryChunk(index, done);
+                                    };
+                                    xhr.onabort = () => {
+                                        delete r2Xhr[index];
+                                        delete r2InFlight[index];
+                                        if (!r2Aborted) retryChunk(index, done);
+                                    };
+                                    xhr.ontimeout = () => {
+                                        delete r2Xhr[index];
+                                        delete r2InFlight[index];
+                                        retryChunk(index, done);
+                                    };
                                     xhr.send(chunk);
                                 })
                                 .catch(() => retryChunk(index, done));
                         };
 
-                        const retryChunk = (index, done) => {
-                            retryCount++;
-                            if (retryCount > maxRetries) {
-                                this.status = 'error';
-                                this.errorMessage = 'R2 upload failed after multiple retries. Your connection might have dropped. Please refresh the page and select the file again to resume.';
-                                return;
-                            }
-                            setTimeout(() => uploadChunk(index, done), 3000);
-                        };
-
                         const r2Worker = () => {
-                            if (r2Completed) return;
+                            if (r2Completed || r2Aborted) return;
                             const index = currentChunk++;
                             if (index >= totalChunks) return;
-                            uploadChunk(index, () => { if (!r2Completed) r2Worker(); });
+                            uploadChunk(index, () => { if (!r2Completed && !r2Aborted) r2Worker(); });
                         };
 
-                        const probeBody = new URLSearchParams();
-                        probeBody.append('upload_token', this.uploadToken || 'none');
-                        probeBody.append('chunk_index', 0);
-                        probeBody.append('total_chunks', totalChunks);
-                        probeBody.append('original_filename', videoFile.name);
-                        fetchWithTimeout('/upload/presign', {
-                            method: 'POST',
-                            headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-                            body: probeBody.toString()
-                        }, 15000)
+                        const probeAndStartR2 = () => {
+                            const probeBody = new URLSearchParams();
+                            probeBody.append('upload_token', this.uploadToken || 'none');
+                            probeBody.append('chunk_index', 0);
+                            probeBody.append('total_chunks', totalChunks);
+                            probeBody.append('original_filename', videoFile.name);
+                            fetchWithTimeout('/upload/presign', {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: probeBody.toString()
+                            }, 15000)
+                                .then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status))
+                                .then(() => {
+                                    r2Watchdog();
+                                    for (let w = 0; w < R2_WORKERS; w++) r2Worker();
+                                })
+                                .catch(() => {
+                                    startLegacyUpload();
+                                });
+                        };
+
+                        fetchWithTimeout('/upload/resume-check?upload_token=' + this.uploadToken + '&total_chunks=' + totalChunks + '&original_filename=' + encodeURIComponent(videoFile.name) + '&_=' + Date.now(), {}, 15000)
                             .then(res => res.ok ? res.json() : Promise.reject('HTTP ' + res.status))
-                            .then(() => {
-                                for (let w = 0; w < R2_WORKERS; w++) r2Worker();
+                            .then(data => {
+                                if (data && data.status === 'completed') {
+                                    submitWhenR2Done();
+                                    return;
+                                }
+                                if (data && data.uploaded_chunks > 0) {
+                                    currentChunk = data.uploaded_chunks;
+                                    for (let i = 0; i < currentChunk; i++) r2DoneSet[i] = true;
+                                    r2BytesDone = currentChunk * chunkSize;
+                                    updateR2Progress();
+                                    this.progress = Math.round((r2BytesDone / videoFile.size) * 100);
+                                    this.loadedSize = this.formatSize(r2BytesDone);
+                                    this.totalSize = this.formatSize(videoFile.size);
+                                }
+                                probeAndStartR2();
                             })
-                            .catch(() => {
-                                startLegacyUpload();
-                            });
+                            .catch(() => probeAndStartR2());
                     } else {
                         submitFinalForm(formData);
                     }
